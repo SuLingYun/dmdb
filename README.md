@@ -1,6 +1,6 @@
 # DM-Database-Recovery
 
-达梦数据库快速恢复工具集 | DM Database Rapid Recovery Toolkit
+> 达梦数据库快速恢复工具集 | 由 **Trae AI** 生成
 
 [![Shell](https://img.shields.io/badge/Shell-Bash-green.svg)](https://www.gnu.org/software/bash/)
 [![Platform](https://img.shields.io/badge/Platform-Linux-blue.svg)](https://www.linux.org/)
