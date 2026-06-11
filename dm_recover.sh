@@ -4,7 +4,6 @@
 # 达梦数据库 DM 快速恢复脚本
 # 用途: 同机/异机快速恢复，显示可恢复时间范围
 # 作者: 数据库管理员
-# 生成工具: Trae AI
 # 日期: 2026-06-11
 ###############################################################################
 
@@ -194,6 +193,20 @@ run_dmrman() {
 RECOVER_EARLIEST_TIME=""
 RECOVER_LATEST_TIME=""
 
+# 辅助函数：从 YYYY_MM_DD 格式的日期字符串解析为 YYYY-MM-DD HH:MM:SS
+# 如果日期解析失败，返回空字符串
+parse_backup_date() {
+    local ymd="$1"
+    [ -z "$ymd" ] && return 1
+    local disp="${ymd//_/-} 00:00:00"
+    local sec=$(date -d "$disp" +%s 2>/dev/null)
+    if [ -z "$sec" ] || [ "$sec" -eq 0 ]; then
+        return 1
+    fi
+    echo "$disp"
+    return 0
+}
+
 # =============================================================================
 # 显示可恢复时间范围
 # =============================================================================
@@ -219,19 +232,39 @@ show_recoverable_range() {
         if [ -n "$last_arch_raw" ]; then
             local date_part="${last_arch_raw:0:10}"
             local time_part="${last_arch_raw:11}"
-            RECOVER_LATEST_TIME="${date_part} ${time_part//-/:}"
+            local test_latest="${date_part} ${time_part//-/:}"
+            local test_sec=$(date -d "$test_latest" +%s 2>/dev/null)
+            if [ -n "$test_sec" ]; then
+                RECOVER_LATEST_TIME="$test_latest"
+            else
+                log_warn "归档文件名时间解析失败: $last_arch_raw"
+            fi
         fi
+    fi
+    
+    # 如果 RECOVER_LATEST_TIME 仍然为空，设置一个合理默认值
+    if [ -z "$RECOVER_LATEST_TIME" ]; then
+        RECOVER_LATEST_TIME="$(date '+%Y-%m-%d %H:%M:%S')"
+        log_warn "未找到归档日志，最晚可恢复时间设为当前时间"
     fi
     
     # 找出"有归档覆盖"的全量范围（全量日期 <= 最晚归档日期）
     local latest_arch_sec=$(date -d "${RECOVER_LATEST_TIME}" +%s 2>/dev/null || echo 0)
     local oldest_good_full=""   # 最旧的有归档覆盖的全量 → 最早可恢复时间
     local latest_good_full=""   # 最新的有归档覆盖的全量 → 推荐基座
+    local oldest_full_any=""    # 最早的全量备份（无论是否有归档覆盖）
     
     for fbak in $(echo "$full_baks" | sort); do
         local fd=$(basename "$fbak" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
-        local fd_disp="${fd//_/-} 01:05:19"
+        local fd_disp=$(parse_backup_date "$fd")
+        if [ -z "$fd_disp" ]; then
+            log_warn "备份目录名日期解析失败: $(basename "$fbak")，跳过"
+            continue
+        fi
         local fd_sec=$(date -d "$fd_disp" +%s 2>/dev/null || echo 0)
+        
+        [ -z "$oldest_full_any" ] && oldest_full_any="$fbak"
+        
         if [ "$fd_sec" -gt 0 ] && [ "$latest_arch_sec" -gt 0 ] && [ "$fd_sec" -le "$latest_arch_sec" ]; then
             [ -z "$oldest_good_full" ] && oldest_good_full="$fbak"
             latest_good_full="$fbak"
@@ -240,7 +273,26 @@ show_recoverable_range() {
     
     if [ -n "$oldest_good_full" ]; then
         local oldest_date=$(basename "$oldest_good_full" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
-        RECOVER_EARLIEST_TIME="${oldest_date//_/-} 01:05:19"
+        local good_disp=$(parse_backup_date "$oldest_date")
+        if [ -n "$good_disp" ]; then
+            RECOVER_EARLIEST_TIME="$good_disp"
+        fi
+    fi
+    
+    # 如果仍然没有 earliest_time（所有全量都晚于归档），用最早的全量备份时间
+    if [ -z "$RECOVER_EARLIEST_TIME" ] && [ -n "$oldest_full_any" ]; then
+        local oldest_any_date=$(basename "$oldest_full_any" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
+        local any_disp=$(parse_backup_date "$oldest_any_date")
+        if [ -n "$any_disp" ]; then
+            RECOVER_EARLIEST_TIME="$any_disp"
+            log_warn "没有全量备份早于归档时间，最早可恢复时间设为最早的全量备份时间"
+        fi
+    fi
+    
+    # 最终兜底：如果 earliest_time 仍然为空
+    if [ -z "$RECOVER_EARLIEST_TIME" ]; then
+        RECOVER_EARLIEST_TIME="${latest_date//_/-} 00:00:00"
+        log_warn "时间解析异常，最早可恢复时间使用最新全量备份日期"
     fi
     
     echo -e "  最新全量备份: ${GREEN}$(basename "$latest_full")${NC}"
@@ -309,18 +361,42 @@ show_recoverable_range() {
 validate_time_point() {
     local tp="$1"
     
+    # 1. 格式校验
     if ! echo "$tp" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$'; then
         log_error "时间格式错误: $tp"
         log_error "正确格式: YYYY-MM-DD HH:MI:SS"
         return 1
     fi
     
+    # 2. 日期合法性校验（检查是否真实存在，如 2026-02-30 是非法的）
+    local date_part="${tp%% *}"
+    local time_part="${tp##* }"
+    local normalized=$(date -d "$tp" +%Y-%m-%d 2>/dev/null)
+    if [ "$normalized" != "$date_part" ]; then
+        log_error "日期不合法: $date_part"
+        log_error "请检查月份（如 2月没有30日，4/6/9/11月没有31日等）"
+        return 1
+    fi
+    
+    # 3. 时间合法性校验
+    local normalized_full=$(date -d "$tp" +%Y-%m-%d\ %H:%M:%S 2>/dev/null)
+    if [ -z "$normalized_full" ]; then
+        log_error "时间不合法: $time_part"
+        return 1
+    fi
+    
+    # 4. 时间范围校验
     local tp_sec=$(date -d "$tp" +%s 2>/dev/null)
     local earliest_sec=$(date -d "$RECOVER_EARLIEST_TIME" +%s 2>/dev/null)
     local latest_sec=$(date -d "$RECOVER_LATEST_TIME" +%s 2>/dev/null)
     
-    if [ -z "$tp_sec" ] || [ -z "$earliest_sec" ] || [ -z "$latest_sec" ]; then
-        log_warn "时间转换失败，跳过范围校验"
+    if [ -z "$tp_sec" ]; then
+        log_warn "目标时间转换失败，跳过范围校验"
+        return 0
+    fi
+    
+    if [ -z "$earliest_sec" ] || [ -z "$latest_sec" ]; then
+        log_warn "可恢复时间范围解析异常，跳过范围校验（最早: $RECOVER_EARLIEST_TIME, 最晚: $RECOVER_LATEST_TIME）"
         return 0
     fi
     
@@ -413,8 +489,31 @@ start_db() {
     # 从 systemd 服务文件读取运行用户
     local dm_user=$(grep '^User=' /etc/systemd/system/${DB_SERVICE}.service 2>/dev/null | sed 's/User=//')
     [ -z "$dm_user" ] && dm_user="dmdba"
-    # 检查数据文件属主（SYSTEM.DBF 是 dmrman 恢复的核心文件，一定是 root 属主）
-    if [ -f "$DM_DATA/SYSTEM.DBF" ] && [ "$(stat -c %U "$DM_DATA/SYSTEM.DBF" 2>/dev/null)" != "$dm_user" ]; then
+    
+    # 检查数据目录权限：检查目录本身及关键数据文件
+    local need_chown=0
+    # 检查目录权限
+    if [ -d "$DM_DATA" ] && [ "$(stat -c %U "$DM_DATA" 2>/dev/null)" != "$dm_user" ]; then
+        need_chown=1
+    fi
+    # 检查关键数据文件权限（dmrman 恢复的核心文件通常是 root 属主）
+    for dbfile in SYSTEM.DBF ROLL.DBF MAIN.DBF TEMP.DBF; do
+        if [ -f "$DM_DATA/$dbfile" ] && [ "$(stat -c %U "$DM_DATA/$dbfile" 2>/dev/null)" != "$dm_user" ]; then
+            need_chown=1
+            break
+        fi
+    done
+    # 检查其他 .DBF 文件
+    if [ $need_chown -eq 0 ]; then
+        for dbfile in $(ls "$DM_DATA"/*.DBF 2>/dev/null); do
+            if [ "$(stat -c %U "$dbfile" 2>/dev/null)" != "$dm_user" ]; then
+                need_chown=1
+                break
+            fi
+        done
+    fi
+    
+    if [ $need_chown -eq 1 ]; then
         log_info "修复数据目录权限 (${dm_user})..."
         chown -R "${dm_user}":"${dm_user}" "$DM_DATA" 2>/dev/null || \
         chown -R "${dm_user}" "$DM_DATA" 2>/dev/null || \
@@ -487,28 +586,42 @@ restore_full() {
     if [ "$mode" != "time" ] && [ "${INC_MODE:-all}" != "none" ] && [ "${INC_MODE:-all}" != "select" ]; then
         # 检测是否有增量备份
         local full_date=$(basename "$latest" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
-        local full_sec=$(date -d "${full_date//_/-} 01:05:19" +%s 2>/dev/null || echo 0)
+        local full_disp=$(parse_backup_date "$full_date")
+        local full_sec=0
+        [ -n "$full_disp" ] && full_sec=$(date -d "$full_disp" +%s 2>/dev/null || echo 0)
         local has_inc=0
+        local inc_count_check=0
         for bak in $(ls -d $DM_BAK/DB_DMTEST_INCREMENT_* 2>/dev/null | sort); do
             local d_yyyymmdd=$(basename "$bak" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
-            local d_sec=$(date -d "${d_yyyymmdd//_/-} 01:05:19" +%s 2>/dev/null || echo 0)
+            local d_disp=$(parse_backup_date "$d_yyyymmdd")
+            local d_sec=0
+            [ -n "$d_disp" ] && d_sec=$(date -d "$d_disp" +%s 2>/dev/null || echo 0)
             if [ "$d_sec" -gt "$full_sec" ]; then
                 has_inc=1
-                break
+                inc_count_check=$((inc_count_check + 1))
             fi
         done
         
         if [ "$has_inc" -eq 1 ]; then
-            log_info "检测到增量备份，使用 WITH BACKUPDIR 模式..."
+            log_info "检测到 $inc_count_check 个增量备份，使用 WITH BACKUPDIR 模式..."
             log_info "WITH BACKUPDIR 将自动搜索并应用以下增量:"
             for bak in $(ls -d $DM_BAK/DB_DMTEST_INCREMENT_* 2>/dev/null | sort); do
                 local d_yyyymmdd=$(basename "$bak" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
-                local d_sec=$(date -d "${d_yyyymmdd//_/-} 01:05:19" +%s 2>/dev/null || echo 0)
+                local d_disp=$(parse_backup_date "$d_yyyymmdd")
+                local d_sec=0
+                [ -n "$d_disp" ] && d_sec=$(date -d "$d_disp" +%s 2>/dev/null || echo 0)
                 [ "$d_sec" -gt "$full_sec" ] && log_detail "$(basename "$bak")"
             done
             
             run_dmrman "恢复全量+增量链" "$DM_HOME/bin/dmrman CTLSTMT=\"RESTORE DATABASE '$DM_DATA/dm.ini' FROM BACKUPSET '$latest' WITH BACKUPDIR '$DM_BAK';\""
-            [ $? -eq 0 ] && restore_ok=1 && log_info "全量+增量链恢复成功"
+            local wbd_rc=$?
+            if [ $wbd_rc -eq 0 ]; then
+                restore_ok=1
+                log_info "全量+增量链恢复成功"
+            else
+                log_warn "WITH BACKUPDIR 恢复失败（退出码: $wbd_rc），将降级为纯全量恢复"
+                log_warn "注意：降级后增量备份需要手动逐个应用"
+            fi
         fi
     fi
     
@@ -556,11 +669,15 @@ apply_incremental() {
         local latest_full=$(ls -d $DM_BAK/DB_DMTEST_FULL_* 2>/dev/null | sort | tail -1)
         [ -n "$SELECTED_FULL" ] && latest_full="$SELECTED_FULL"
         local full_date=$(basename "$latest_full" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
-        local full_sec=$(date -d "${full_date//_/-} 01:05:19" +%s 2>/dev/null || echo 0)
+        local full_disp=$(parse_backup_date "$full_date")
+        local full_sec=0
+        [ -n "$full_disp" ] && full_sec=$(date -d "$full_disp" +%s 2>/dev/null || echo 0)
         
         for bak in $(ls -d $DM_BAK/DB_DMTEST_INCREMENT_* 2>/dev/null | sort); do
             local d_yyyymmdd=$(basename "$bak" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
-            local d_sec=$(date -d "${d_yyyymmdd//_/-} 01:05:19" +%s 2>/dev/null || echo 0)
+            local d_disp=$(parse_backup_date "$d_yyyymmdd")
+            local d_sec=0
+            [ -n "$d_disp" ] && d_sec=$(date -d "$d_disp" +%s 2>/dev/null || echo 0)
             if [ "$d_sec" -gt "$full_sec" ]; then
                 total=$((total + 1))
                 to_apply="$to_apply
@@ -574,13 +691,37 @@ $bak"
     log_info "共 $total 个增量备份待应用"
     
     local applied=0
+    local succeeded=0
+    local skipped=0
     for bak in $to_apply; do
         [ -z "$bak" ] && continue
         applied=$((applied + 1))
         run_dmrman "增量[$applied/$total] $(basename "$bak")" \
             "$DM_HOME/bin/dmrman CTLSTMT=\"RECOVER DATABASE '$DM_DATA/dm.ini' FROM BACKUPSET '$bak';\""
-        [ $? -ne 0 ] && log_warn "$(basename "$bak") 跳过（N_MAGIC 不匹配）"
+        local inc_rc=$?
+        if [ $inc_rc -eq 0 ]; then
+            succeeded=$((succeeded + 1))
+        else
+            skipped=$((skipped + 1))
+            log_warn "$(basename "$bak") 跳过（N_MAGIC 不匹配或恢复失败，退出码: $inc_rc）"
+        fi
     done
+    
+    # 检查增量恢复结果
+    if [ "$succeeded" -eq 0 ] && [ "$total" -gt 0 ]; then
+        log_error "所有 $total 个增量备份均未成功应用！"
+        log_error "可能原因：N_MAGIC 不匹配或备份集损坏"
+        log_error "建议：检查备份集是否与当前全量备份匹配，或尝试仅恢复全量备份"
+        read -p "是否继续执行（可能导致数据不完整）? (yes/no, 默认no): " force_inc_continue
+        if [ "$force_inc_continue" != "yes" ]; then
+            exit 1
+        fi
+    elif [ "$skipped" -gt 0 ]; then
+        log_warn "增量备份完成：成功 $succeeded 个，跳过 $skipped 个"
+        log_warn "注意：被跳过的增量中的数据将无法恢复，数据库可能处于部分恢复状态"
+    else
+        log_info "所有 $succeeded 个增量备份成功应用"
+    fi
     
     log_info "增量备份处理完成，继续执行归档恢复"
 }
@@ -713,17 +854,18 @@ main() {
     # （如果最新全量日期 > 最晚归档日期，则需要让用户选择较早的全量）
     local latest_full_check=$(ls -d $DM_BAK/DB_DMTEST_FULL_* 2>/dev/null | sort | tail -1)
     local lf_check_date=$(basename "$latest_full_check" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
-    local lf_check_disp="${lf_check_date//_/-} 01:05:19"
+    local lf_check_disp=$(parse_backup_date "$lf_check_date")
+    [ -z "$lf_check_disp" ] && lf_check_disp="${lf_check_date//_/-} 00:00:00"
     local lf_sec=$(date -d "$lf_check_disp" +%s 2>/dev/null || echo 0)
     local latest_sec=$(date -d "${RECOVER_LATEST_TIME}" +%s 2>/dev/null || echo 0)
     if [ "$lf_sec" -gt 0 ] && [ "$latest_sec" -gt 0 ] && [ "$lf_sec" -gt "$latest_sec" ]; then
         echo ""
-        echo -e "${YELLOW}╔══════════════════════════════════════════════════════════╗${NC}"
-        echo -e "${YELLOW}║  注意：最新全量备份晚于最新归档日志                    ║${NC}"
-        echo -e "${YELLOW}║  最新全量: ${lf_check_disp}              ║${NC}"
-        echo -e "${YELLOW}║  最新归档: ${RECOVER_LATEST_TIME}              ║${NC}"
-        echo -e "${YELLOW}║  需要选择较早的全量备份才能使用归档日志                ║${NC}"
-        echo -e "${YELLOW}╚══════════════════════════════════════════════════════════╝${NC}"
+        echo -e "${YELLOW}========================================${NC}"
+        echo -e "${YELLOW}  注意：最新全量备份晚于最新归档日志${NC}"
+        echo -e "${YELLOW}  最新全量: ${lf_check_disp}${NC}"
+        echo -e "${YELLOW}  最新归档: ${RECOVER_LATEST_TIME}${NC}"
+        echo -e "${YELLOW}  需要选择较早的全量备份才能使用归档日志${NC}"
+        echo -e "${YELLOW}========================================${NC}"
         echo ""
         echo -e "${CYAN}可用的全量备份:${NC}"
         local all_full=$(ls -d $DM_BAK/DB_DMTEST_FULL_* 2>/dev/null | sort -r)
@@ -753,7 +895,8 @@ main() {
         # 更新 RECOVER_EARLIEST_TIME
         if [ -n "$SELECTED_FULL" ]; then
             local selected_date=$(basename "$SELECTED_FULL" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
-            RECOVER_EARLIEST_TIME="${selected_date//_/-} 01:05:19"
+            local sel_disp=$(parse_backup_date "$selected_date")
+            [ -n "$sel_disp" ] && RECOVER_EARLIEST_TIME="$sel_disp"
         fi
         echo ""
     fi
@@ -813,9 +956,10 @@ main() {
             local best_full=""
             for fbak in $(ls -d $DM_BAK/DB_DMTEST_FULL_* 2>/dev/null | sort); do
                 local fd=$(basename "$fbak" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
-                local fd_disp="${fd//_/-} 01:05:19"
-                local fd_sec=$(date -d "$fd_disp" +%s 2>/dev/null || echo 0)
-                if [ "$fd_sec" -le "$tp_sec" ]; then
+                local fd_disp=$(parse_backup_date "$fd")
+                local fd_sec=0
+                [ -n "$fd_disp" ] && fd_sec=$(date -d "$fd_disp" +%s 2>/dev/null || echo 0)
+                if [ "$fd_sec" -gt 0 ] && [ "$fd_sec" -le "$tp_sec" ]; then
                     best_full="$fbak"
                 fi
             done
@@ -853,7 +997,8 @@ main() {
                 log_info "已切换全量备份: $(basename "$fbak")"
                 # 更新最早可恢复时间
                 local selected_date=$(basename "$fbak" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
-                RECOVER_EARLIEST_TIME="${selected_date//_/-} 01:05:19"
+                local sel_disp=$(parse_backup_date "$selected_date")
+                [ -n "$sel_disp" ] && RECOVER_EARLIEST_TIME="$sel_disp"
             fi
         done
     fi
@@ -861,17 +1006,21 @@ main() {
     # =========================================================================
     # 增量备份选择（模式3可手动选择，模式1/latest用全部）
     # =========================================================================
-    # 先计算当前选择的全量备份日期（修复 plan_full_date_yyyymmdd 未定义 bug）
+    # 先计算当前选择的全量备份日期
     local current_full_name=$(basename "${SELECTED_FULL:-$(ls -d $DM_BAK/DB_DMTEST_FULL_* 2>/dev/null | sort -r | head -1)}")
     local current_full_date=$(echo "$current_full_name" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
-    local current_full_sec=$(date -d "${current_full_date//_/-} 01:05:19" +%s 2>/dev/null || echo 0)
+    local current_full_disp=$(parse_backup_date "$current_full_date")
+    local current_full_sec=0
+    [ -n "$current_full_disp" ] && current_full_sec=$(date -d "$current_full_disp" +%s 2>/dev/null || echo 0)
     
     # 筛选出基座全量之后的增量列表
     local inc_options=""
     local inc_opt_count=0
     for bak in $(ls -d $DM_BAK/DB_DMTEST_INCREMENT_* 2>/dev/null | sort); do
         local d_yyyymmdd=$(basename "$bak" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
-        local d_sec=$(date -d "${d_yyyymmdd//_/-} 01:05:19" +%s 2>/dev/null || echo 0)
+        local d_disp=$(parse_backup_date "$d_yyyymmdd")
+        local d_sec=0
+        [ -n "$d_disp" ] && d_sec=$(date -d "$d_disp" +%s 2>/dev/null || echo 0)
         if [ "$d_sec" -gt "$current_full_sec" ]; then
             inc_opt_count=$((inc_opt_count + 1))
             inc_options="$inc_options
@@ -932,7 +1081,9 @@ $bak"
     # 确定全量基座和日期
     local plan_full_name=$(basename "${SELECTED_FULL:-$(ls -d $DM_BAK/DB_DMTEST_FULL_* 2>/dev/null | sort -r | head -1)}")
     local plan_full_date_yyyymmdd=$(echo "$plan_full_name" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
-    local plan_full_sec=$(date -d "${plan_full_date_yyyymmdd//_/-} 01:05:19" +%s 2>/dev/null || echo 0)
+    local plan_full_disp=$(parse_backup_date "$plan_full_date_yyyymmdd")
+    local plan_full_sec=0
+    [ -n "$plan_full_disp" ] && plan_full_sec=$(date -d "$plan_full_disp" +%s 2>/dev/null || echo 0)
     echo -e "  ${GREEN}基座全量:${NC} $plan_full_name"
     
     # -------------------------------------------------------------------------
@@ -946,7 +1097,9 @@ $bak"
         local inc_count=0
         for bak in $(ls -d $DM_BAK/DB_DMTEST_INCREMENT_* 2>/dev/null | sort); do
             local d_yyyymmdd=$(basename "$bak" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
-            local d_sec=$(date -d "${d_yyyymmdd//_/-} 01:05:19" +%s 2>/dev/null || echo 0)
+            local d_disp=$(parse_backup_date "$d_yyyymmdd")
+            local d_sec=0
+            [ -n "$d_disp" ] && d_sec=$(date -d "$d_disp" +%s 2>/dev/null || echo 0)
             if [ "$d_sec" -gt "$plan_full_sec" ]; then
                 inc_count=$((inc_count + 1))
             fi
@@ -959,7 +1112,9 @@ $bak"
             local inc_all_list=""
             for bak in $(ls -d $DM_BAK/DB_DMTEST_INCREMENT_* 2>/dev/null | sort); do
                 local d_yyyymmdd=$(basename "$bak" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
-                local d_sec=$(date -d "${d_yyyymmdd//_/-} 01:05:19" +%s 2>/dev/null || echo 0)
+                local d_disp=$(parse_backup_date "$d_yyyymmdd")
+                local d_sec=0
+                [ -n "$d_disp" ] && d_sec=$(date -d "$d_disp" +%s 2>/dev/null || echo 0)
                 if [ "$d_sec" -gt "$plan_full_sec" ]; then
                     inc_all_list="$inc_all_list
 $(basename "$bak")"
@@ -987,7 +1142,9 @@ $(basename "$bak")"
                 local inc_all_list=""
                 for bak in $(ls -d $DM_BAK/DB_DMTEST_INCREMENT_* 2>/dev/null | sort); do
                     local d_yyyymmdd=$(basename "$bak" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
-                    local d_sec=$(date -d "${d_yyyymmdd//_/-} 01:05:19" +%s 2>/dev/null || echo 0)
+                    local d_disp=$(parse_backup_date "$d_yyyymmdd")
+                    local d_sec=0
+                    [ -n "$d_disp" ] && d_sec=$(date -d "$d_disp" +%s 2>/dev/null || echo 0)
                     if [ "$d_sec" -gt "$plan_full_sec" ]; then
                         inc_all_list="$inc_all_list
 $(basename "$bak")"
@@ -1107,8 +1264,21 @@ $ts|$f"
     fi
     
     update_magic
-    start_db
-    verify_db
+    
+    if start_db; then
+        log_info "数据库启动成功"
+    else
+        log_error "数据库启动失败，请检查日志"
+        exit 1
+    fi
+    
+    if verify_db; then
+        log_info "数据库验证通过"
+    else
+        log_error "数据库验证失败，请检查状态"
+        exit 1
+    fi
+    
     post_backup
     
     # 摘要
