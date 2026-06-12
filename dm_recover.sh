@@ -796,8 +796,11 @@ verify_db() {
     
     echo ""
     
-    log_info "执行 ALTER DATABASE OPEN..."
-    run_dmrman "执行 ALTER DATABASE OPEN" "$DM_HOME/bin/dmrman CTLSTMT=\"ALTER DATABASE '$DM_DATA/dm.ini' OPEN;\""
+    if [ "$port_ready" -eq 1 ]; then
+        log_info "数据库端口已就绪"
+    else
+        log_warn "数据库端口未就绪，但进程仍在启动中"
+    fi
     
     log_info "数据库验证完成"
 }
