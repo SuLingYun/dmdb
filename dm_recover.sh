@@ -19,6 +19,14 @@ DM_ARCH="/data/dmarch/DMTEST"
 DB_SERVICE="DmServiceDMTEST"
 DB_PORT="5236"
 
+# 备份/归档文件名模式（根据实际命名习惯修改）
+# 全量备份目录名模式：如 DB_DMTEST_FULL_2026_06_10
+FULL_BAK_PATTERN="DB_DMTEST_FULL_*"
+# 增量备份目录名模式：如 DB_DMTEST_INCREMENT_2026_06_11
+INC_BAK_PATTERN="DB_DMTEST_INCREMENT_*"
+# 归档日志文件名模式：如 ARCHIVE_LOCAL1_2026-06-10_14-30-00.log
+ARCH_PATTERN="ARCHIVE_LOCAL*"
+
 # 恢复后是否自动执行全量备份 (yes/no)
 AUTO_BACKUP="no"
 
@@ -215,7 +223,7 @@ show_recoverable_range() {
     echo -e "${CYAN}========== 可恢复时间范围 ==========${NC}"
     
     # 全量备份
-    local full_baks=$(ls -d $DM_BAK/DB_DMTEST_FULL_* 2>/dev/null | sort)
+    local full_baks=$(ls -d $DM_BAK/$FULL_BAK_PATTERN 2>/dev/null | sort)
     if [ -z "$full_baks" ]; then
         log_error "未找到全量备份！"
         exit 1
@@ -225,7 +233,7 @@ show_recoverable_range() {
     local latest_date=$(basename "$latest_full" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
     
     # 从归档文件名提取最晚归档时间 (自动从最后一个归档文件名提取)
-    local arch_files=$(find "$DM_ARCH" -type f -name "ARCHIVE_LOCAL1_*" 2>/dev/null | sort)
+    local arch_files=$(find "$DM_ARCH" -type f -name "$ARCH_PATTERN" 2>/dev/null | sort)
     if [ -n "$arch_files" ]; then
         local last_arch=$(echo "$arch_files" | tail -1)
         local last_arch_raw=$(basename "$last_arch" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}')
@@ -306,7 +314,7 @@ show_recoverable_range() {
     fi
     
     # 增量备份（只显示 >= 最新全量的，避免混淆）
-    local inc_all=$(ls -d $DM_BAK/DB_DMTEST_INCREMENT_* 2>/dev/null | sort)
+    local inc_all=$(ls -d $DM_BAK/$INC_BAK_PATTERN 2>/dev/null | sort)
     local inc_total=$(echo "$inc_all" | grep -c . 2>/dev/null || echo 0)
     
     local inc_count=0
@@ -558,7 +566,7 @@ backup_current() {
 restore_full() {
     local mode="${1:-latest}"
     log_step "恢复全量备份..."
-    local latest=$(ls -d $DM_BAK/DB_DMTEST_FULL_* 2>/dev/null | sort | tail -1)
+    local latest=$(ls -d $DM_BAK/$FULL_BAK_PATTERN 2>/dev/null | sort | tail -1)
     [ -z "$latest" ] && log_error "未找到全量备份" && exit 1
     
     [ -n "$SELECTED_FULL" ] && latest="$SELECTED_FULL"
@@ -591,7 +599,7 @@ restore_full() {
         [ -n "$full_disp" ] && full_sec=$(date -d "$full_disp" +%s 2>/dev/null || echo 0)
         local has_inc=0
         local inc_count_check=0
-        for bak in $(ls -d $DM_BAK/DB_DMTEST_INCREMENT_* 2>/dev/null | sort); do
+        for bak in $(ls -d $DM_BAK/$INC_BAK_PATTERN 2>/dev/null | sort); do
             local d_yyyymmdd=$(basename "$bak" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
             local d_disp=$(parse_backup_date "$d_yyyymmdd")
             local d_sec=0
@@ -605,7 +613,7 @@ restore_full() {
         if [ "$has_inc" -eq 1 ]; then
             log_info "检测到 $inc_count_check 个增量备份，使用 WITH BACKUPDIR 模式..."
             log_info "WITH BACKUPDIR 将自动搜索并应用以下增量:"
-            for bak in $(ls -d $DM_BAK/DB_DMTEST_INCREMENT_* 2>/dev/null | sort); do
+            for bak in $(ls -d $DM_BAK/$INC_BAK_PATTERN 2>/dev/null | sort); do
                 local d_yyyymmdd=$(basename "$bak" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
                 local d_disp=$(parse_backup_date "$d_yyyymmdd")
                 local d_sec=0
@@ -666,14 +674,14 @@ apply_incremental() {
         log_info "手动选择增量，共 $total 个"
     else
         # 全部增量（模式1降级方案 或 模式3默认）
-        local latest_full=$(ls -d $DM_BAK/DB_DMTEST_FULL_* 2>/dev/null | sort | tail -1)
+        local latest_full=$(ls -d $DM_BAK/$FULL_BAK_PATTERN 2>/dev/null | sort | tail -1)
         [ -n "$SELECTED_FULL" ] && latest_full="$SELECTED_FULL"
         local full_date=$(basename "$latest_full" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
         local full_disp=$(parse_backup_date "$full_date")
         local full_sec=0
         [ -n "$full_disp" ] && full_sec=$(date -d "$full_disp" +%s 2>/dev/null || echo 0)
         
-        for bak in $(ls -d $DM_BAK/DB_DMTEST_INCREMENT_* 2>/dev/null | sort); do
+        for bak in $(ls -d $DM_BAK/$INC_BAK_PATTERN 2>/dev/null | sort); do
             local d_yyyymmdd=$(basename "$bak" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
             local d_disp=$(parse_backup_date "$d_yyyymmdd")
             local d_sec=0
@@ -823,7 +831,7 @@ SQLEOF
 post_backup() {
     [ "$AUTO_BACKUP" != "yes" ] && return 0
     log_step "执行恢复后全量备份..."
-    local dir="$DM_BAK/DB_DMTEST_FULL_$(date +%Y_%m_%d)_01_05_19"
+    local dir="$DM_BAK/${FULL_BAK_PATTERN%\*}$(date +%Y_%m_%d)_01_05_19"
     run_dmrman "执行恢复后备份" "$DM_HOME/bin/dmrman <<EOF
 BACKUP DATABASE '$DM_DATA/dm.ini' FULL TO '$dir' BACKUPINFO '恢复后自动备份';
 EOF"
@@ -852,7 +860,7 @@ main() {
     
     # 检查：最新全量备份是否有归档覆盖
     # （如果最新全量日期 > 最晚归档日期，则需要让用户选择较早的全量）
-    local latest_full_check=$(ls -d $DM_BAK/DB_DMTEST_FULL_* 2>/dev/null | sort | tail -1)
+    local latest_full_check=$(ls -d $DM_BAK/$FULL_BAK_PATTERN 2>/dev/null | sort | tail -1)
     local lf_check_date=$(basename "$latest_full_check" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
     local lf_check_disp=$(parse_backup_date "$lf_check_date")
     [ -z "$lf_check_disp" ] && lf_check_disp="${lf_check_date//_/-} 00:00:00"
@@ -868,7 +876,7 @@ main() {
         echo -e "${YELLOW}========================================${NC}"
         echo ""
         echo -e "${CYAN}可用的全量备份:${NC}"
-        local all_full=$(ls -d $DM_BAK/DB_DMTEST_FULL_* 2>/dev/null | sort -r)
+        local all_full=$(ls -d $DM_BAK/$FULL_BAK_PATTERN 2>/dev/null | sort -r)
         local idx=0
         local full_list=""
         for fbak in $all_full; do
@@ -887,7 +895,7 @@ main() {
             if [ "$selected_idx" -eq "$full_choice" ] 2>/dev/null; then
                 log_info "使用全量备份: $(basename "$fbak")"
                 local fbak_date=$(basename "$fbak" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
-                if [ "$fbak_date" != "$(basename "$(ls -d $DM_BAK/DB_DMTEST_FULL_* 2>/dev/null | sort -r | head -1)" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')" ]; then
+                if [ "$fbak_date" != "$(basename "$(ls -d $DM_BAK/$FULL_BAK_PATTERN 2>/dev/null | sort -r | head -1)" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')" ]; then
                     export SELECTED_FULL="$fbak"
                 fi
             fi
@@ -954,7 +962,7 @@ main() {
         local tp_sec=$(date -d "$time_point" +%s 2>/dev/null || echo 0)
         if [ "$tp_sec" -gt 0 ]; then
             local best_full=""
-            for fbak in $(ls -d $DM_BAK/DB_DMTEST_FULL_* 2>/dev/null | sort); do
+            for fbak in $(ls -d $DM_BAK/$FULL_BAK_PATTERN 2>/dev/null | sort); do
                 local fd=$(basename "$fbak" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
                 local fd_disp=$(parse_backup_date "$fd")
                 local fd_sec=0
@@ -975,10 +983,10 @@ main() {
     
     # 全量备份选择确认（所有模式下均可用）
     echo ""
-    echo -e "${CYAN}当前选择的全量备份:${NC} ${GREEN}$(basename "${SELECTED_FULL:-$(ls -d $DM_BAK/DB_DMTEST_FULL_* 2>/dev/null | sort -r | head -1)}")${NC}"
+    echo -e "${CYAN}当前选择的全量备份:${NC} ${GREEN}$(basename "${SELECTED_FULL:-$(ls -d $DM_BAK/$FULL_BAK_PATTERN 2>/dev/null | sort -r | head -1)}")${NC}"
     read -p "是否更换全量备份? (yes/no, 默认no): " change_full
     if [ "$change_full" = "yes" ] || [ "$change_full" = "y" ]; then
-        local all_full=$(ls -d $DM_BAK/DB_DMTEST_FULL_* 2>/dev/null | sort -r)
+        local all_full=$(ls -d $DM_BAK/$FULL_BAK_PATTERN 2>/dev/null | sort -r)
         local idx=0
         local full_list=""
         echo -e "${CYAN}可用的全量备份:${NC}"
@@ -1007,7 +1015,7 @@ main() {
     # 增量备份选择（模式3可手动选择，模式1/latest用全部）
     # =========================================================================
     # 先计算当前选择的全量备份日期
-    local current_full_name=$(basename "${SELECTED_FULL:-$(ls -d $DM_BAK/DB_DMTEST_FULL_* 2>/dev/null | sort -r | head -1)}")
+    local current_full_name=$(basename "${SELECTED_FULL:-$(ls -d $DM_BAK/$FULL_BAK_PATTERN 2>/dev/null | sort -r | head -1)}")
     local current_full_date=$(echo "$current_full_name" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
     local current_full_disp=$(parse_backup_date "$current_full_date")
     local current_full_sec=0
@@ -1016,7 +1024,7 @@ main() {
     # 筛选出基座全量之后的增量列表
     local inc_options=""
     local inc_opt_count=0
-    for bak in $(ls -d $DM_BAK/DB_DMTEST_INCREMENT_* 2>/dev/null | sort); do
+    for bak in $(ls -d $DM_BAK/$INC_BAK_PATTERN 2>/dev/null | sort); do
         local d_yyyymmdd=$(basename "$bak" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
         local d_disp=$(parse_backup_date "$d_yyyymmdd")
         local d_sec=0
@@ -1079,7 +1087,7 @@ $bak"
     echo -e "${CYAN}══════════ 恢复计划 ══════════${NC}"
     
     # 确定全量基座和日期
-    local plan_full_name=$(basename "${SELECTED_FULL:-$(ls -d $DM_BAK/DB_DMTEST_FULL_* 2>/dev/null | sort -r | head -1)}")
+    local plan_full_name=$(basename "${SELECTED_FULL:-$(ls -d $DM_BAK/$FULL_BAK_PATTERN 2>/dev/null | sort -r | head -1)}")
     local plan_full_date_yyyymmdd=$(echo "$plan_full_name" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
     local plan_full_disp=$(parse_backup_date "$plan_full_date_yyyymmdd")
     local plan_full_sec=0
@@ -1095,7 +1103,7 @@ $bak"
         # 列出所有在基座全量之后的增量
         local inc_list=""
         local inc_count=0
-        for bak in $(ls -d $DM_BAK/DB_DMTEST_INCREMENT_* 2>/dev/null | sort); do
+        for bak in $(ls -d $DM_BAK/$INC_BAK_PATTERN 2>/dev/null | sort); do
             local d_yyyymmdd=$(basename "$bak" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
             local d_disp=$(parse_backup_date "$d_yyyymmdd")
             local d_sec=0
@@ -1110,7 +1118,7 @@ $bak"
         elif [ "$mode" = "latest" ]; then
             # 模式1：WITH BACKUPDIR 自动应用全部
             local inc_all_list=""
-            for bak in $(ls -d $DM_BAK/DB_DMTEST_INCREMENT_* 2>/dev/null | sort); do
+            for bak in $(ls -d $DM_BAK/$INC_BAK_PATTERN 2>/dev/null | sort); do
                 local d_yyyymmdd=$(basename "$bak" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
                 local d_disp=$(parse_backup_date "$d_yyyymmdd")
                 local d_sec=0
@@ -1140,7 +1148,7 @@ $(basename "$bak")"
             else
                 # all
                 local inc_all_list=""
-                for bak in $(ls -d $DM_BAK/DB_DMTEST_INCREMENT_* 2>/dev/null | sort); do
+                for bak in $(ls -d $DM_BAK/$INC_BAK_PATTERN 2>/dev/null | sort); do
                     local d_yyyymmdd=$(basename "$bak" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
                     local d_disp=$(parse_backup_date "$d_yyyymmdd")
                     local d_sec=0
@@ -1181,7 +1189,7 @@ $(basename "$bak")"
         local arch_earliest_ts=""
         local arch_latest_ts=""
         
-        for f in $(find "$DM_ARCH" -type f -name "ARCHIVE_LOCAL1_*" 2>/dev/null | sort); do
+        for f in $(find "$DM_ARCH" -type f -name "$ARCH_PATTERN" 2>/dev/null | sort); do
             local ts=$(basename "$f" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}')
             [ -z "$ts" ] && continue
             local ts_sec=$(date -d "${ts//_/ }" +%s 2>/dev/null || echo 0)
