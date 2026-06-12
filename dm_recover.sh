@@ -828,12 +828,11 @@ full_backup() {
     # 确保 DMAP 服务运行
     start_dmap
     
-    # 执行全量备份（使用 DIsql 在线备份，支持数据库运行时备份）
-    # 使用 echo 传递密码给 disql
+    # 执行全量备份（使用操作系统认证方式登录）
     local dm_sql_file=$(mktemp /tmp/dm_backup_XXXXXX.sql)
     echo "BACKUP DATABASE FULL BACKUPSET '$bak_dir';" > "$dm_sql_file"
-    # 使用详细模式显示备份进度，通过 echo 传递密码
-    run_dmrman "完整备份" "echo \"${DB_PASS}\" | $DM_HOME/bin/disql ${DB_USER}@127.0.0.1:${DB_PORT} @$dm_sql_file" "yes"
+    # 使用操作系统认证（需要以dmdba用户执行）
+    run_dmrman "完整备份" "su - dmdba -c \"$DM_HOME/bin/disql / as sysdba @$dm_sql_file\"" "yes"
     local bak_rc=$?
     
     # 清理临时SQL文件
