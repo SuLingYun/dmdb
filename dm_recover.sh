@@ -796,31 +796,8 @@ verify_db() {
     
     echo ""
     
-    if [ "$port_ready" -eq 0 ]; then
-        log_warn "数据库端口未就绪，尝试直接执行 ALTER DATABASE OPEN..."
-        sleep 3
-        # 用 heredoc 执行 SQL（管道方式会因密码含 @ 导致 disql 交互式提示）
-        $DM_HOME/bin/disql $DB_USER/"$DB_PASS"@localhost:$DB_PORT <<'SQLEOF'
-ALTER DATABASE OPEN;
-SELECT '状态' 项目, STATUS$ || '-' || MODE$ 结果 FROM V$INSTANCE;
-SELECT '时间' 项目, TO_CHAR(SYSDATE,'YYYY-MM-DD HH24:MI:SS') 结果 FROM DUAL;
-EXIT;
-SQLEOF
-        return $?
-    fi
-    
-    log_info "数据库已就绪，执行验证..."
-    
-    # 使用 heredoc 执行 SQL（<<'SQLEOF' 阻止 shell 变量展开，原样传给 disql）
-    $DM_HOME/bin/disql $DB_USER/"$DB_PASS"@localhost:$DB_PORT <<'SQLEOF'
-SELECT '状态' 项目, STATUS$ || '-' || MODE$ 结果 FROM V$INSTANCE;
-SELECT '时间' 项目, TO_CHAR(SYSDATE,'YYYY-MM-DD HH24:MI:SS') 结果 FROM DUAL;
-SELECT '归档' 项目, ARCH_MODE 结果 FROM V$DATABASE;
-ALTER DATABASE OPEN;
-SELECT 'OPEN状态' 项目, STATUS$ || '-' || MODE$ 结果 FROM V$INSTANCE;
-SELECT '增量数据确认' 项目, 'RESTORE WITH BACKUPDIR 已成功应用全量+增量链，数据已恢复至最新' 结果 FROM DUAL;
-EXIT;
-SQLEOF
+    log_info "执行 ALTER DATABASE OPEN..."
+    run_dmrman "执行 ALTER DATABASE OPEN" "$DM_HOME/bin/dmrman CTLSTMT=\"ALTER DATABASE '$DM_DATA/dm.ini' OPEN;\""
     
     log_info "数据库验证完成"
 }
