@@ -828,8 +828,8 @@ full_backup() {
     # 确保 DMAP 服务运行
     start_dmap
     
-    # 执行全量备份
-    run_dmrman "完整备份" "$DM_HOME/bin/dmrman CTLSTMT=\"BACKUP DATABASE '$DM_DATA/dm.ini' FULL BACKUPSET '$bak_dir';\""
+    # 执行全量备份（使用 ONLINE 模式，支持数据库运行时备份）
+    run_dmrman "完整备份" "$DM_HOME/bin/dmrman CTLSTMT=\"BACKUP DATABASE '$DM_DATA/dm.ini' FULL ONLINE BACKUPSET '$bak_dir';\""
     local bak_rc=$?
     
     if [ $bak_rc -eq 0 ]; then
