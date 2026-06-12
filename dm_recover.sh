@@ -806,6 +806,45 @@ verify_db() {
 }
 
 # =============================================================================
+# 完整备份数据库
+# =============================================================================
+full_backup() {
+    log_step "执行完整备份..."
+    
+    # 生成备份目录名
+    local bak_dir="$DM_BAK/DB_DMTEST_FULL_$(date +%Y_%m_%d_%H_%M_%S)"
+    local bak_name="DB_DMTEST_FULL_$(date +%Y_%m_%d)"
+    
+    echo ""
+    echo -e "${CYAN}========== 完整备份数据库 ==========${NC}"
+    echo -e "  备份路径: ${GREEN}$bak_dir${NC}"
+    echo -e "  数据库:   ${GREEN}$DB_SERVICE${NC}"
+    echo -e "  数据目录: ${GREEN}$DM_DATA${NC}"
+    echo ""
+    
+    read -p "确认执行完整备份? (yes/no): " confirm
+    [ "$confirm" != "yes" ] && log_info "已取消" && exit 0
+    
+    # 确保 DMAP 服务运行
+    start_dmap
+    
+    # 执行全量备份
+    run_dmrman "完整备份" "$DM_HOME/bin/dmrman CTLSTMT=\"BACKUP DATABASE '$DM_DATA/dm.ini' FULL TO '$bak_dir' BACKUPSET '$bak_dir';\""
+    local bak_rc=$?
+    
+    if [ $bak_rc -eq 0 ]; then
+        echo ""
+        echo -e "${GREEN}========== 备份完成 ==========${NC}"
+        echo -e "  备份目录: ${GREEN}$bak_dir${NC}"
+        echo -e "  备份时间: $(date '+%Y-%m-%d %H:%M:%S')"
+        echo "=================================="
+    else
+        log_error "备份失败（退出码: $bak_rc）"
+        exit 1
+    fi
+}
+
+# =============================================================================
 # 恢复后备份
 # =============================================================================
 post_backup() {
@@ -898,8 +937,9 @@ main() {
         echo -e "  ${GREEN}1)${NC} 恢复到最新状态 (推荐)"
         echo -e "  ${GREEN}2)${NC} 恢复到指定时间点"
         echo -e "  ${GREEN}3)${NC} 仅恢复备份，不应用归档"
+        echo -e "  ${GREEN}4)${NC} 完整备份数据库"
         echo ""
-        read -p "请输入选项 (1/2/3): " choice
+        read -p "请输入选项 (1/2/3/4): " choice
         echo ""
         
         case "$choice" in
@@ -929,8 +969,12 @@ main() {
                 log_warn "仅恢复备份，不应用归档"
                 break
                 ;;
+            4)
+                mode="backup"
+                break
+                ;;
             *)
-                echo -e "${YELLOW}无效选项，请输入 1、2 或 3${NC}"
+                echo -e "${YELLOW}无效选项，请输入 1、2、3 或 4${NC}"
                 echo ""
                 continue
                 ;;
@@ -1060,6 +1104,14 @@ ${inc_arr[$((idx-1))]}"
         else
             echo -e "${GREEN}  将恢复全量及全部 $inc_opt_count 个增量${NC}"
         fi
+    fi
+    
+    # =========================================================================
+    # 模式4：完整备份数据库
+    # =========================================================================
+    if [ "$mode" = "backup" ]; then
+        full_backup
+        exit 0
     fi
     
     # =========================================================================
@@ -1230,6 +1282,7 @@ $ts|$f"
         latest) mode_desc="恢复到最新状态" ;;
         time)   mode_desc="恢复到指定时间点" ;;
         reset)  mode_desc="仅恢复备份，不应用归档" ;;
+        backup) mode_desc="完整备份数据库" ;;
     esac
     echo -e "  ${GREEN}恢复模式:${NC} $mode_desc"
     
