@@ -829,11 +829,11 @@ full_backup() {
     start_dmap
     
     # 执行全量备份（使用 DIsql 在线备份，支持数据库运行时备份）
-    # 使用环境变量传递密码，避免连接字符串中的特殊字符问题
+    # 使用 echo 传递密码给 disql
     local dm_sql_file=$(mktemp /tmp/dm_backup_XXXXXX.sql)
     echo "BACKUP DATABASE FULL BACKUPSET '$bak_dir';" > "$dm_sql_file"
-    # 使用详细模式显示备份进度
-    run_dmrman "完整备份" "DM_PASSWORD=${DB_PASS} $DM_HOME/bin/disql ${DB_USER}@127.0.0.1:${DB_PORT} @$dm_sql_file" "yes"
+    # 使用详细模式显示备份进度，通过 echo 传递密码
+    run_dmrman "完整备份" "echo \"${DB_PASS}\" | $DM_HOME/bin/disql ${DB_USER}@127.0.0.1:${DB_PORT} @$dm_sql_file" "yes"
     local bak_rc=$?
     
     # 清理临时SQL文件
