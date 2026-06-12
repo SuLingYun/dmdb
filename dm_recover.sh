@@ -1192,7 +1192,9 @@ $(basename "$bak")"
         for f in $(find "$DM_ARCH" -type f -name "$ARCH_PATTERN" 2>/dev/null | sort); do
             local ts=$(basename "$f" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}')
             [ -z "$ts" ] && continue
-            local ts_sec=$(date -d "${ts//_/ }" +%s 2>/dev/null || echo 0)
+            local arch_date="${ts:0:10}"
+            local arch_time="${ts:11}"
+            local ts_sec=$(date -d "${arch_date} ${arch_time//-/:}" +%s 2>/dev/null || echo 0)
             [ "$ts_sec" -eq 0 ] && continue
             
             # 归档 > 基座全量时间 且 <= 窗口终点
