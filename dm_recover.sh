@@ -829,8 +829,9 @@ full_backup() {
     start_dmap
     
     # 执行全量备份（使用 DIsql 在线备份，支持数据库运行时备份）
-    # 使用操作系统认证方式，避免密码中特殊字符导致的连接字符串解析问题
-    run_dmrman "完整备份" "$DM_HOME/bin/disql -U ${DB_USER} -P \"${DB_PASS}\" -H 127.0.0.1 -S ${DB_PORT} -E \"BACKUP DATABASE FULL BACKUPSET '$bak_dir';\""
+    # 使用连接字符串方式，但密码需要转义@符号
+    local escaped_pass=$(echo "$DB_PASS" | sed 's/@/\\@/g')
+    run_dmrman "完整备份" "$DM_HOME/bin/disql ${DB_USER}/${escaped_pass}@127.0.0.1:${DB_PORT} -E \"BACKUP DATABASE FULL BACKUPSET '$bak_dir';\""
     local bak_rc=$?
     
     if [ $bak_rc -eq 0 ]; then
