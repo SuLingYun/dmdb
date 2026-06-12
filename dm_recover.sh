@@ -829,7 +829,8 @@ full_backup() {
     start_dmap
     
     # 执行全量备份（使用 DIsql 在线备份，支持数据库运行时备份）
-    run_dmrman "完整备份" "$DM_HOME/bin/disql ${DB_USER}/${DB_PASS}@localhost:${DB_PORT} -E \"BACKUP DATABASE FULL BACKUPSET '$bak_dir';\""
+    # 使用127.0.0.1而非localhost，避免DNS解析问题
+    run_dmrman "完整备份" "$DM_HOME/bin/disql ${DB_USER}/${DB_PASS}@127.0.0.1:${DB_PORT} -E \"BACKUP DATABASE FULL BACKUPSET '$bak_dir';\""
     local bak_rc=$?
     
     if [ $bak_rc -eq 0 ]; then
