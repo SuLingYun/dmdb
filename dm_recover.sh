@@ -1005,34 +1005,36 @@ main() {
         fi
     fi
     
-    # 全量备份选择确认（所有模式下均可用）
-    echo ""
-    echo -e "${CYAN}当前选择的全量备份:${NC} ${GREEN}$(basename "${SELECTED_FULL:-$(ls -d $DM_BAK/$FULL_BAK_PATTERN 2>/dev/null | sort -r | head -1)}")${NC}"
-    read -p "是否更换全量备份? (yes/no, 默认no): " change_full
-    if [ "$change_full" = "yes" ] || [ "$change_full" = "y" ]; then
-        local all_full=$(ls -d $DM_BAK/$FULL_BAK_PATTERN 2>/dev/null | sort -r)
-        local idx=0
-        local full_list=""
-        echo -e "${CYAN}可用的全量备份:${NC}"
-        for fbak in $all_full; do
-            idx=$((idx + 1))
-            echo -e "  ${GREEN}${idx})${NC} $(basename "$fbak")"
-            full_list="$full_list $fbak"
-        done
+    # 全量备份选择确认（仅恢复模式可用，备份模式跳过）
+    if [ "$mode" != "backup" ]; then
         echo ""
-        read -p "请选择序号 (1-${idx}): " full_choice
-        local selected_idx=0
-        for fbak in $full_list; do
-            selected_idx=$((selected_idx + 1))
-            if [ "$selected_idx" -eq "$full_choice" ] 2>/dev/null; then
-                export SELECTED_FULL="$fbak"
-                log_info "已切换全量备份: $(basename "$fbak")"
-                # 更新最早可恢复时间
-                local selected_date=$(basename "$fbak" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
-                local sel_disp=$(parse_backup_date "$selected_date")
-                [ -n "$sel_disp" ] && RECOVER_EARLIEST_TIME="$sel_disp"
-            fi
-        done
+        echo -e "${CYAN}当前选择的全量备份:${NC} ${GREEN}$(basename "${SELECTED_FULL:-$(ls -d $DM_BAK/$FULL_BAK_PATTERN 2>/dev/null | sort -r | head -1)}")${NC}"
+        read -p "是否更换全量备份? (yes/no, 默认no): " change_full
+        if [ "$change_full" = "yes" ] || [ "$change_full" = "y" ]; then
+            local all_full=$(ls -d $DM_BAK/$FULL_BAK_PATTERN 2>/dev/null | sort -r)
+            local idx=0
+            local full_list=""
+            echo -e "${CYAN}可用的全量备份:${NC}"
+            for fbak in $all_full; do
+                idx=$((idx + 1))
+                echo -e "  ${GREEN}${idx})${NC} $(basename "$fbak")"
+                full_list="$full_list $fbak"
+            done
+            echo ""
+            read -p "请选择序号 (1-${idx}): " full_choice
+            local selected_idx=0
+            for fbak in $full_list; do
+                selected_idx=$((selected_idx + 1))
+                if [ "$selected_idx" -eq "$full_choice" ] 2>/dev/null; then
+                    export SELECTED_FULL="$fbak"
+                    log_info "已切换全量备份: $(basename "$fbak")"
+                    # 更新最早可恢复时间
+                    local selected_date=$(basename "$fbak" | grep -oE '[0-9]{4}_[0-9]{2}_[0-9]{2}')
+                    local sel_disp=$(parse_backup_date "$selected_date")
+                    [ -n "$sel_disp" ] && RECOVER_EARLIEST_TIME="$sel_disp"
+                fi
+            done
+        fi
     fi
     
     # =========================================================================
