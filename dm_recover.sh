@@ -834,11 +834,20 @@ full_backup() {
     local bak_rc=$?
     
     if [ $bak_rc -eq 0 ]; then
-        echo ""
-        echo -e "${GREEN}========== 备份完成 ==========${NC}"
-        echo -e "  备份目录: ${GREEN}$bak_dir${NC}"
-        echo -e "  备份时间: $(date '+%Y-%m-%d %H:%M:%S')"
-        echo "=================================="
+        # 验证备份目录是否真的创建成功
+        if [ -d "$bak_dir" ] && [ -n "$(ls -A "$bak_dir")" ]; then
+            echo ""
+            echo -e "${GREEN}========== 备份完成 ==========${NC}"
+            echo -e "  备份目录: ${GREEN}$bak_dir${NC}"
+            echo -e "  备份时间: $(date '+%Y-%m-%d %H:%M:%S')"
+            echo -e "  文件数量: $(ls -la "$bak_dir" | wc -l) 个"
+            echo "=================================="
+            log_info "备份验证通过"
+        else
+            log_error "备份命令执行完成，但备份目录不存在或为空"
+            log_error "备份目录: $bak_dir"
+            exit 1
+        fi
     else
         log_error "备份失败（退出码: $bak_rc）"
         exit 1
