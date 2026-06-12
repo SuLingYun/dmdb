@@ -1040,11 +1040,13 @@ $bak"
             read -p "增量选择: " inc_sel_input
             local inc_idx=1
             local inc_selected_list=""
-            echo "$inc_options" | while IFS= read -r bak; do
-                [ -z "$bak" ] && continue
-                echo ",$inc_sel_input," | grep -q ",$inc_idx," && inc_selected_list="$inc_selected_list
-$bak"
-                inc_idx=$((inc_idx + 1))
+            local inc_arr=()
+            while IFS= read -r bak; do
+                [ -n "$bak" ] && inc_arr+=("$bak")
+            done <<< "$inc_options"
+            for idx in $(seq 1 ${#inc_arr[@]}); do
+                echo ",$inc_sel_input," | grep -q ",$idx," && inc_selected_list="$inc_selected_list
+${inc_arr[$((idx-1))]}"
             done
             export INC_SELECTED="$inc_selected_list"
             local sel_cnt=$(echo "$inc_selected_list" | grep -c . 2>/dev/null || echo 0)
