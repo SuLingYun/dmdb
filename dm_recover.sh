@@ -829,10 +829,8 @@ full_backup() {
     start_dmap
     
     # 执行全量备份（使用操作系统认证方式登录）
-    # 使用here-doc方式传递SQL，避免临时文件权限问题
-    run_dmrman "完整备份" "su - dmdba -c \"$DM_HOME/bin/disql / as sysdba <<EOF
-BACKUP DATABASE FULL BACKUPSET '$bak_dir';
-EOF\"" "yes"
+    # 使用echo管道传递SQL语句
+    run_dmrman "完整备份" "su - dmdba -c \"echo \\\"BACKUP DATABASE FULL BACKUPSET '$bak_dir';\\\" | $DM_HOME/bin/disql / as sysdba\"" "yes"
     
     if [ $bak_rc -eq 0 ]; then
         # 验证备份目录是否真的创建成功
