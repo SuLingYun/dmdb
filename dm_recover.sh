@@ -829,7 +829,7 @@ full_backup() {
     start_dmap
     
     # 执行全量备份
-    run_dmrman "完整备份" "$DM_HOME/bin/dmrman CTLSTMT=\"BACKUP DATABASE '$DM_DATA/dm.ini' FULL TO '$bak_dir' BACKUPSET '$bak_dir';\""
+    run_dmrman "完整备份" "$DM_HOME/bin/dmrman CTLSTMT=\"BACKUP DATABASE '$DM_DATA/dm.ini' FULL BACKUPSET '$bak_dir';\""
     local bak_rc=$?
     
     if [ $bak_rc -eq 0 ]; then
