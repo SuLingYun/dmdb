@@ -829,8 +829,8 @@ full_backup() {
     start_dmap
     
     # 执行全量备份（使用操作系统认证方式登录）
-    # 使用echo管道传递SQL语句
-    run_dmrman "完整备份" "su - dmdba -c \"echo \\\"BACKUP DATABASE FULL BACKUPSET '$bak_dir';\\\" | $DM_HOME/bin/disql / as sysdba\"" "yes"
+    # 使用echo管道传递SQL语句，启用压缩
+    run_dmrman "完整备份" "su - dmdba -c \"echo \\\"BACKUP DATABASE FULL COMPRESSED BACKUPSET '$bak_dir';\\\" | $DM_HOME/bin/disql / as sysdba\"" "yes"
     
     if [ $bak_rc -eq 0 ]; then
         # 验证备份目录是否真的创建成功
