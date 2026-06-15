@@ -619,8 +619,8 @@ start_db() {
 # =============================================================================
 backup_current() {
     echo ""
-    read -p "是否备份当前数据目录? (yes/no, 默认yes): " do_backup_current
-    if [ "$do_backup_current" = "no" ] || [ "$do_backup_current" = "n" ]; then
+    read -p "是否备份当前数据目录? (yes/no, 默认no): " do_backup_current
+    if [ "$do_backup_current" != "yes" ] && [ "$do_backup_current" != "y" ]; then
         log_warn "跳过当前数据备份（恢复将直接覆盖原数据）"
         return 0
     fi
