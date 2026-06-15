@@ -506,6 +506,51 @@ tail -f /var/log/messages
 
 ---
 
+### 问题19：异机恢复时报错 DM[-8374] 归档路径无效
+
+**错误信息：**
+
+```
+DM[-8374]:归档文件路径下未收集到有效的归档文件
+```
+
+**原因：** 异机恢复时，目标机器上没有原机器的归档日志。模式3正确配置后已无需处理此问题。
+
+**解决方案：**
+
+脚本已修复此场景。使用模式3「仅恢复备份，不应用归档」，脚本会自动处理：
+
+1. 先执行 `RECOVER DATABASE`（无归档会报错，忽略）
+2. 再执行 `RECOVER DATABASE UPDATE DB_MAGIC`（更新 DB_MAGIC 让库可启动）
+
+如果手动执行 dmrman，命令如下：
+
+```bash
+# 1. 先执行普通恢复（无归档会失败，忽略即可）
+dmrman CTLSTMT="RECOVER DATABASE '/data/dmdata/DAMENG/dm.ini';"
+
+# 2. 再执行 UPDATE DB_MAGIC
+dmrman CTLSTMT="RECOVER DATABASE '/data/dmdata/DAMENG/dm.ini' UPDATE DB_MAGIC;"
+```
+
+---
+
+### 问题20：达梦要求先执行 RECOVER 再执行 UPDATE DB_MAGIC
+
+**错误信息：**
+
+```
+RMAN[-8308]:需要先执行RECOVER DATABASE操作，再执行RECOVER DATABASE UPDATE DB_MAGIC操作
+```
+
+**原因：** 达梦要求必须先执行不带参数的 `RECOVER DATABASE`，再执行 `UPDATE DB_MAGIC`，两步缺一不可。
+
+**解决方案：**
+
+按照问题19中的两步命令顺序执行，先普通恢复，再 UPDATE DB_MAGIC。脚本已按此顺序正确处理。
+
+---
+
 ## 获取帮助
 
 如果问题仍未解决：
