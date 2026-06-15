@@ -813,6 +813,9 @@ $bak"
 
 # =============================================================================
 # 应用归档
+# 说明：
+#   - 模式1/2：使用 WITH ARCHIVEDIR 应用归档日志
+#   - 异机场景：归档目录为空或不包含有效归档时，自动降级为 WITH BACKUPDIR UPDATE DB_MAGIC
 # =============================================================================
 apply_archives() {
     local mode="$1"
@@ -820,6 +823,35 @@ apply_archives() {
     
     log_step "应用归档日志..."
     
+    # 检查归档目录是否包含有效的归档文件（异机场景可能为空）
+    local arch_count=$(find "$DM_ARCH" -type f -name "$ARCH_PATTERN" 2>/dev/null | wc -l | tr -d ' ')
+    
+    # 异机场景：无归档日志时，自动降级为 WITH BACKUPDIR 方式
+    if [ -z "$arch_count" ] || [ "$arch_count" -eq 0 ] 2>/dev/null; then
+        log_warn "归档目录为空或无有效归档文件（异机恢复场景）"
+        log_info "自动降级为 WITH BACKUPDIR 方式恢复数据库状态..."
+        
+        local backup_dir=$(dirname "${SELECTED_FULL:-$(ls -d $DM_BAK/$FULL_BAK_PATTERN 2>/dev/null | sort -r | head -1)}")
+        
+        SECONDS=0
+        run_dmrman "RECOVER DATABASE WITH BACKUPDIR" "$DM_HOME/bin/dmrman CTLSTMT=\"RECOVER DATABASE '$DM_DATA/dm.ini' WITH BACKUPDIR '$backup_dir';\""
+        log_info "RECOVER WITH BACKUPDIR 耗时: ${SECONDS} 秒"
+        
+        if [ $? -ne 0 ]; then
+            log_warn "RECOVER WITH BACKUPDIR 失败，尝试直接 UPDATE DB_MAGIC..."
+        fi
+        
+        SECONDS=0
+        run_dmrman "UPDATE DB_MAGIC" "$DM_HOME/bin/dmrman CTLSTMT=\"RECOVER DATABASE '$DM_DATA/dm.ini' UPDATE DB_MAGIC;\""
+        log_info "UPDATE DB_MAGIC 耗时: ${SECONDS} 秒"
+        
+        # 标记已在 apply_archives 中完成 UPDATE DB_MAGIC，阻止 update_magic 重复执行
+        export ARCH_APPLY_MAGIC_DONE=1
+        log_info "归档应用完成（异机降级模式）"
+        return 0
+    fi
+    
+    # 本机场景：归档目录有有效文件，正常应用归档
     SECONDS=0
     if [ "$mode" = "time" ] && [ -n "$time_point" ]; then
         run_dmrman "恢复到时间点 $time_point" "$DM_HOME/bin/dmrman CTLSTMT=\"RECOVER DATABASE '$DM_DATA/dm.ini' WITH ARCHIVEDIR '$DM_ARCH' UNTIL TIME '$time_point';\""
@@ -833,11 +865,17 @@ apply_archives() {
 
 # =============================================================================
 # 更新 DB_MAGIC
+# 说明：
+#   - 本机场景：先 apply_archives 推进数据，再 UPDATE DB_MAGIC
+#   - 异机场景：apply_archives 已自动处理 UPDATE DB_MAGIC，此处跳过
 # =============================================================================
 update_magic() {
+    # 异机降级场景：apply_archives 已完成 UPDATE DB_MAGIC，跳过
+    [ "${ARCH_APPLY_MAGIC_DONE:-0}" -eq 1 ] && log_info "UPDATE DB_MAGIC 已在归档应用阶段完成，跳过" && return 0
+    
     log_step "更新 DB_MAGIC..."
     SECONDS=0
-    run_dmrman "更新 DB_MAGIC" "$DM_HOME/bin/dmrman CTLSTMT=\"RECOVER DATABASE '$DM_DATA/dm.ini' UPDATE DB_MAGIC;\""
+    run_dmrman "UPDATE DB_MAGIC" "$DM_HOME/bin/dmrman CTLSTMT=\"RECOVER DATABASE '$DM_DATA/dm.ini' UPDATE DB_MAGIC;\""
     log_info "UPDATE DB_MAGIC 耗时: ${SECONDS} 秒"
     [ $? -ne 0 ] && log_error "DB_MAGIC 更新失败" && exit 1
     log_info "DB_MAGIC 更新完成"
