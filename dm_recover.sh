@@ -10,28 +10,60 @@
 # =============================================================================
 # 配置区（根据实际情况修改）
 # =============================================================================
-DB_USER="SYSDBA"
-DB_PASS="ezzk%Od1H86qmMl9@P["
-DM_HOME="/data/dm"
-DM_DATA="/data/dmdata/DMTEST"
-DM_BAK="/data/dmbak/DMTEST/bak"
-DM_ARCH="/data/dmarch/DMTEST"
-DB_SERVICE="DmServiceDMTEST"
-DB_PORT="5236"
+#
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │  场景一：本机同名恢复（DAMENG 实例，数据/备份/归档目录均为 /data/dmdata/     │
+# │         DAMENG 等，直接使用默认值即可）                                       │
+# │  场景二：本机恢复但库名不同（如 DMTEST 实例）                                │
+# │  场景三：异机恢复（备份从其他服务器拷贝过来）                                │
+# │  场景四：不同备份命名习惯（如 FULL_ → FULLbak_）                           │
+# │  场景五：DM_HOME 安装路径不同（如 /opt/dmdbms）                            │
+# └─────────────────────────────────────────────────────────────────────────────┘
+#
+# === 必改项（无论哪种场景，以下参数必须与目标环境一致）===
+#
+# 数据库连接信息（仅用于验证恢复结果，disql 连接用）
+DB_USER="SYSDBA"                 # ← 场景一二三四五：数据库用户名
+DB_PASS="ezzk%Od1H86qmMl9@P["    # ← 场景一二三四五：数据库密码（生产环境建议从环境变量或配置文件读取）
+DM_HOME="/data/dm"               # ← 场景五：修改为实际 DM 安装目录（需包含 bin/dmrman、bin/disql）
+DM_DATA="/data/dmdata/DMTEST"    # ← 场景一：改为 /data/dmdata/DAMENG（默认实例名）
+                                 # ← 场景二三四：改为实际数据目录（/data/dmdata/<你的库名>）
+DM_BAK="/data/dmbak/DMTEST/bak"  # ← 场景一：改为 /data/dmbak/DAMENG/bak（默认实例名）
+                                 # ← 场景二三：改为实际备份目录路径
+DM_ARCH="/data/dmarch/DMTEST"    # ← 场景一：改为 /data/dmarch/DAMENG（默认实例名）
+                                 # ← 场景二三：改为实际归档目录路径
+DB_SERVICE="DmServiceDMTEST"     # ← 场景一：改为 DmServiceDAMENG（默认实例名）
+                                 # ← 场景二：改为你的 systemd 服务名
+DB_PORT="5236"                   # ← 场景一二三四五：改为实际监听端口
 
-# 备份/归档文件名模式（根据实际命名习惯修改）
+# === 必改项（根据备份文件实际命名习惯）===
+#
 # 全量备份目录名模式：如 DB_DMTEST_FULL_2026_06_10
+#   → 场景一：改为 DB_DAMENG_FULL_*（默认实例名）
+#   → 场景二：改为 DB_<你的库名>_FULL_*
+#   → 场景四：改为你的实际命名格式（如 FULLBAK_* 或 BACKUP_*）
 FULL_BAK_PATTERN="DB_DMTEST_FULL_*"
+
 # 增量备份目录名模式：如 DB_DMTEST_INCREMENT_2026_06_11
+#   → 场景一：改为 DB_DAMENG_INCREMENT_*（默认实例名）
+#   → 场景二：改为 DB_<你的库名>_INCREMENT_*
+#   → 场景四：改为你的实际命名格式
 INC_BAK_PATTERN="DB_DMTEST_INCREMENT_*"
+
 # 归档日志文件名模式：如 ARCHIVE_LOCAL1_2026-06-10_14-30-00.log
+#   → 大多数情况下默认的 ARCHIVE_LOCAL* 可以匹配，异机恢复时需要确认
+#   → 如果有多个归档线程（如 LOCAL1/LOCAL2），保持 ARCHIVE_LOCAL* 即可
 ARCH_PATTERN="ARCHIVE_LOCAL*"
 
+# === 可选项 ===
+#
 # 恢复后是否自动执行全量备份 (yes/no)
 AUTO_BACKUP="no"
 
-# 日志文件
+# 日志文件（自动创建子目录）
 RECOVER_LOG="/data/dmbak/DMTEST/recover_$(date +%Y%m%d_%H%M%S).log"
+#   → 场景一：改为 /data/dmbak/DAMENG/recover_...
+#   → 场景二三四：改为实际备份目录下的 recover 日志
 
 # dmrman 超时时间（秒），默认 7200 秒（2小时），设为 0 表示不超时
 DMRMAN_TIMEOUT=7200
