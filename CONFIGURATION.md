@@ -82,7 +82,7 @@ ls -la $DM_HOME/bin/dmrman
 数据库数据文件目录，包含 `dm.ini` 配置文件。
 
 ```bash
-DM_DATA="/data/dmdata/DMTEST"
+DM_DATA="/data/dmdata/DAMENG"
 ```
 
 | 属性 | 值 |
@@ -105,7 +105,7 @@ ls -la $DM_DATA/dm.ini
 备份文件存储目录。
 
 ```bash
-DM_BAK="/data/dmbak/DMTEST/bak"
+DM_BAK="/data/dmbak/DAMENG/bak"
 ```
 
 | 属性 | 值 |
@@ -118,10 +118,10 @@ DM_BAK="/data/dmbak/DMTEST/bak"
 
 ```
 DM_BAK/
-├── DB_DMTEST_FULL_2026_06_01_01_05_19/      # 全量备份
-├── DB_DMTEST_FULL_2026_06_05_01_05_19/
-├── DB_DMTEST_INCREMENT_2026_06_02_01_05_19/ # 增量备份
-├── DB_DMTEST_INCREMENT_2026_06_03_01_05_19/
+├── DB_DAMENG_FULL_2026_06_01_01_05_19/      # 全量备份
+├── DB_DAMENG_FULL_2026_06_05_01_05_19/
+├── DB_DAMENG_INCREMENT_2026_06_02_01_05_19/ # 增量备份
+├── DB_DAMENG_INCREMENT_2026_06_03_01_05_19/
 └── ...
 ```
 
@@ -132,7 +132,7 @@ DM_BAK/
 归档日志存储目录。
 
 ```bash
-DM_ARCH="/data/dmarch/DMTEST"
+DM_ARCH="/data/dmarch/DAMENG"
 ```
 
 | 属性 | 值 |
@@ -157,7 +157,7 @@ DM_ARCH/
 达梦数据库 systemd 服务名称。
 
 ```bash
-DB_SERVICE="DmServiceDMTEST"
+DB_SERVICE="DmServiceDAMENG"
 ```
 
 | 属性 | 值 |
@@ -218,7 +218,7 @@ AUTO_BACKUP="no"
 恢复日志文件路径。
 
 ```bash
-RECOVER_LOG="/data/dmbak/DMTEST/recover_$(date +%Y%m%d_%H%M%S).log"
+RECOVER_LOG="/data/dmbak/DAMENG/recover_$(date +%Y%m%d_%H%M%S).log"
 ```
 
 | 属性 | 值 |
@@ -275,15 +275,15 @@ DMRMAN_TIMEOUT=7200
 DB_USER="SYSDBA"
 DB_PASS="your_secure_password"
 DM_HOME="/data/dm"
-DM_DATA="/data/dmdata/DMTEST"
-DM_BAK="/backup/dmbak/DMTEST/bak"
-DM_ARCH="/backup/dmarch/DMTEST"
-DB_SERVICE="DmServiceDMTEST"
+DM_DATA="/data/dmdata/DAMENG"
+DM_BAK="/backup/dmbak/DAMENG/bak"
+DM_ARCH="/backup/dmarch/DAMENG"
+DB_SERVICE="DmServiceDAMENG"
 DB_PORT="5236"
 
 # 高级配置
 AUTO_BACKUP="no"
-RECOVER_LOG="/backup/dmbak/DMTEST/logs/recover_$(date +%Y%m%d_%H%M%S).log"
+RECOVER_LOG="/backup/dmbak/DAMENG/logs/recover_$(date +%Y%m%d_%H%M%S).log"
 DMRMAN_TIMEOUT=7200
 ```
 
@@ -296,15 +296,15 @@ DMRMAN_TIMEOUT=7200
 DB_USER="SYSDBA"
 DB_PASS="SYSDBA"
 DM_HOME="/opt/dmdbms"
-DM_DATA="/home/dmdba/data/DMTEST"
-DM_BAK="/home/dmdba/backup/DMTEST/bak"
-DM_ARCH="/home/dmdba/backup/DMTEST/arch"
-DB_SERVICE="DmServiceDMTEST"
+DM_DATA="/home/dmdba/data/DAMENG"
+DM_BAK="/home/dmdba/backup/DAMENG/bak"
+DM_ARCH="/home/dmdba/backup/DAMENG/arch"
+DB_SERVICE="DmServiceDAMENG"
 DB_PORT="5236"
 
 # 高级配置
 AUTO_BACKUP="yes"
-RECOVER_LOG="/home/dmdba/backup/DMTEST/logs/recover_$(date +%Y%m%d_%H%M%S).log"
+RECOVER_LOG="/home/dmdba/backup/DAMENG/logs/recover_$(date +%Y%m%d_%H%M%S).log"
 DMRMAN_TIMEOUT=3600
 ```
 
@@ -334,7 +334,7 @@ DMRMAN_TIMEOUT=3600
 ```bash
 # 正确
 DM_HOME="/data/dm"
-DM_DATA="/data/dmdata/DMTEST"
+DM_DATA="/data/dmdata/DAMENG"
 
 # 错误
 DM_HOME="./dm"

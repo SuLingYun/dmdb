@@ -72,7 +72,7 @@ ls -la $DM_HOME/bin/dmrman
 **错误信息：**
 
 ```
-[ERROR] dm.ini 不存在: /data/dmdata/DMTEST/dm.ini
+[ERROR] dm.ini 不存在: /data/dmdata/DAMENG/dm.ini
 ```
 
 **原因：** 数据目录配置错误或 dm.ini 文件丢失。
@@ -84,7 +84,7 @@ ls -la $DM_HOME/bin/dmrman
 find /data -name dm.ini 2>/dev/null
 
 # 2. 检查数据目录
-ls -la /data/dmdata/DMTEST/
+ls -la /data/dmdata/DAMENG/
 ```
 
 ---
@@ -116,7 +116,7 @@ ss -tln | grep 5236
 ps -ef | grep dmserver
 
 # 4. 查看数据库日志
-journalctl -u DmServiceDMTEST -n 50
+journalctl -u DmServiceDAMENG -n 50
 ```
 
 ---
@@ -234,10 +234,10 @@ ls -la $DM_ARCH/
 ```bash
 # 1. 使用 root 或 dmdba 用户运行
 # 2. 检查目录权限
-ls -la /data/dmdata/DMTEST/
+ls -la /data/dmdata/DAMENG/
 
 # 3. 修改权限
-chown -R dmdba:dmdba /data/dmdata/DMTEST
+chown -R dmdba:dmdba /data/dmdata/DAMENG
 
 # 4. 如果是恢复后的权限问题，脚本会自动修复
 # 检查 start_db 函数中的权限修复逻辑
@@ -259,13 +259,13 @@ chown -R dmdba:dmdba /data/dmdata/DMTEST
 
 ```bash
 # 1. 手动修改权限
-chown -R dmdba:dmdba /data/dmdata/DMTEST
+chown -R dmdba:dmdba /data/dmdata/DAMENG
 
 # 2. 检查 systemd 服务配置
-grep '^User=' /etc/systemd/system/DmServiceDMTEST.service
+grep '^User=' /etc/systemd/system/DmServiceDAMENG.service
 
 # 3. 重启服务
-systemctl restart DmServiceDMTEST
+systemctl restart DmServiceDAMENG
 ```
 
 ---
@@ -345,7 +345,7 @@ ps -ef | grep dmap
 
 ```bash
 # 1. 检查归档目录
-ls -la /data/dmarch/DMTEST/
+ls -la /data/dmarch/DAMENG/
 
 # 2. 确认归档配置
 grep "ARCH_MODE" $DM_DATA/dm.ini
@@ -401,13 +401,13 @@ ls -la $DM_ARCH/ | tail -20
 
 ```bash
 # 1. 检查备份目录
-ls -la /data/dmbak/DMTEST/bak/
+ls -la /data/dmbak/DAMENG/bak/
 
 # 2. 查找增量备份
-find /data/dmbak -name "DB_DMTEST_INCREMENT_*"
+find /data/dmbak -name "DB_DAMENG_INCREMENT_*"
 
 # 3. 确认增量备份命名规范
-# 格式: DB_DMTEST_INCREMENT_YYYY_MM_DD_HH_MM_SS
+# 格式: DB_DAMENG_INCREMENT_YYYY_MM_DD_HH_MM_SS
 ```
 
 ---
@@ -482,20 +482,20 @@ SQL> SELECT * FROM V$LOCK;
 
 ```bash
 # 1. 找到最新的日志文件
-ls -lt /data/dmbak/DMTEST/*.log | head -5
+ls -lt /data/dmbak/DAMENG/*.log | head -5
 
 # 2. 查看日志内容
-cat /data/dmbak/DMTEST/recover_20260611_103015.log
+cat /data/dmbak/DAMENG/recover_20260611_103015.log
 
 # 3. 搜索错误信息
-grep -E "ERROR|error|失败" /data/dmbak/DMTEST/recover_*.log
+grep -E "ERROR|error|失败" /data/dmbak/DAMENG/recover_*.log
 ```
 
 ### 查看系统日志
 
 ```bash
 # 数据库服务日志
-journalctl -u DmServiceDMTEST -n 100
+journalctl -u DmServiceDAMENG -n 100
 
 # 内核日志
 dmesg | grep -i dm
