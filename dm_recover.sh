@@ -1521,26 +1521,16 @@ $(basename "$bak")"
     else
         log_warn "跳过归档日志应用"
         log_step "恢复数据库一致性（无归档，仅完成还原）..."
+        
+        # 模式3（仅恢复备份）：数据已通过 RESTORE 恢复，无需 RECOVER
+        # 直接 UPDATE DB_MAGIC 让数据库可启动
         SECONDS=0
-        
-        local backup_dir=$(dirname "${SELECTED_FULL:-$(ls -d $DM_BAK/$FULL_BAK_PATTERN 2>/dev/null | sort -r | head -1)}")
-        
-        log_info "执行 RECOVER DATABASE WITH BACKUPDIR（从备份集恢复状态）..."
-        run_dmrman "恢复数据库一致性" "$DM_HOME/bin/dmrman CTLSTMT=\"RECOVER DATABASE '$DM_DATA/dm.ini' WITH BACKUPDIR '$backup_dir';\""
-        local recover_rc=$?
-        log_info "RECOVER WITH BACKUPDIR 耗时: ${SECONDS} 秒"
-        
-        if [ $recover_rc -ne 0 ]; then
-            log_warn "RECOVER WITH BACKUPDIR 失败，尝试直接执行 UPDATE DB_MAGIC..."
-        fi
-        
-        log_info "执行 UPDATE DB_MAGIC..."
-        run_dmrman "更新 DB_MAGIC" "$DM_HOME/bin/dmrman CTLSTMT=\"RECOVER DATABASE '$DM_DATA/dm.ini' UPDATE DB_MAGIC;\""
+        run_dmrman "更新 DB_MAGIC（无归档，直接更新）" "$DM_HOME/bin/dmrman CTLSTMT=\"RECOVER DATABASE '$DM_DATA/dm.ini' UPDATE DB_MAGIC;\""
         local magic_rc=$?
         log_info "UPDATE DB_MAGIC 耗时: ${SECONDS} 秒"
         
-        [ $magic_rc -ne 0 ] && log_error "数据库一致性恢复失败" && exit 1
-        log_info "数据库一致性恢复完成"
+        [ $magic_rc -ne 0 ] && log_error "UPDATE DB_MAGIC 失败，请检查数据库状态" && exit 1
+        log_info "数据库一致性恢复完成（无归档模式）"
     fi
     
     if [ "$mode" != "reset" ]; then
