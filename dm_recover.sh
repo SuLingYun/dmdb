@@ -348,7 +348,7 @@ show_recoverable_range() {
     
     # 增量备份（只显示 > 最新全量的，避免混淆）
     local inc_all=$(ls -d $DM_BAK/$INC_BAK_PATTERN 2>/dev/null | sort)
-    local inc_total=$(echo "$inc_all" | grep -c . 2>/dev/null || echo 0)
+    local inc_total=$(echo "$inc_all" | grep -c . 2>/dev/null | tr -d '\n' || echo 0)
     
     local latest_full_datetime=$(parse_backup_datetime "$(basename "$latest_full")")
     local latest_full_sec=0
@@ -1440,7 +1440,7 @@ $(basename "$bak")"
         log_warn "跳过归档日志应用"
         log_step "恢复数据库一致性（无归档，仅完成还原）..."
         SECONDS=0
-        run_dmrman "恢复数据库一致性" "$DM_HOME/bin/dmrman CTLSTMT=\"RECOVER DATABASE '$DM_DATA/dm.ini' WITH ARCHIVEDIR '$DM_ARCH';\""
+        run_dmrman "恢复数据库一致性" "$DM_HOME/bin/dmrman CTLSTMT=\"RECOVER DATABASE '$DM_DATA/dm.ini' UPDATE DB_MAGIC;\""
         local recover_rc=$?
         log_info "RECOVER 耗时: ${SECONDS} 秒"
         [ $recover_rc -ne 0 ] && log_error "数据库一致性恢复失败" && exit 1
