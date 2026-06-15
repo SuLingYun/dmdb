@@ -1106,8 +1106,8 @@ main() {
         echo -e "  ${GREEN}1)${NC} 恢复到最新状态 (推荐)"
         echo -e "  ${GREEN}2)${NC} 恢复到指定时间点"
         echo -e "  ${GREEN}3)${NC} 仅恢复备份，不应用归档"
-        echo -e "  ${GREEN}4)${NC} 完整备份数据库（dmrman脱机）"
-        echo -e "  ${GREEN}5)${NC} 完整备份数据库（disql联机）"
+        echo -e "  ${GREEN}4)${NC} 完整备份数据库（物理备份/dmrman脱机）"
+        echo -e "  ${GREEN}5)${NC} 完整备份数据库（逻辑备份/disql联机）"
         echo ""
         read -p "请输入选项 (1/2/3/4/5): " choice
         echo ""
