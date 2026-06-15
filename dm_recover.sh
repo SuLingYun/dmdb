@@ -586,6 +586,13 @@ start_db() {
 # 备份当前数据（复制一份，不移动原文件）
 # =============================================================================
 backup_current() {
+    echo ""
+    read -p "是否备份当前数据目录? (yes/no, 默认yes): " do_backup_current
+    if [ "$do_backup_current" = "no" ] || [ "$do_backup_current" = "n" ]; then
+        log_warn "跳过当前数据备份（恢复将直接覆盖原数据）"
+        return 0
+    fi
+    
     log_step "备份当前数据..."
     local broken="${DM_DATA}_broken_$(date +%Y%m%d_%H%M%S)"
     
