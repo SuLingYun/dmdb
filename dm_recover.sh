@@ -515,9 +515,10 @@ stop_db() {
         sleep 3
     fi
     
-    # 检查并停止 dmap 进程（备份恢复辅助进程）
+    # 检查并停止 dmap 进程（备份归档管理进程，备份恢复辅助服务）
     local dmap_pid=$(pgrep -f "dmap" | head -1)
     if [ -n "$dmap_pid" ]; then
+        log_info "停止 DMAP 服务（备份归档管理进程）..."
         kill -9 $dmap_pid 2>/dev/null
         sleep 1
     fi
@@ -532,10 +533,14 @@ stop_db() {
 }
 
 # =============================================================================
-# 启动 DMAP 服务（备份恢复辅助进程）
+# 启动 DMAP 服务
+# 说明：DMAP（DM Backup Archive Manager）是达梦数据库的备份归档管理进程
+#       - 负责备份集的管理和校验
+#       - 支持备份集加密和解密
+#       - dmrman 执行备份恢复时依赖此服务
 # =============================================================================
 start_dmap() {
-    log_step "启动 DMAP 服务..."
+    log_step "启动 DMAP 服务（达梦备份归档管理进程）..."
     
     # 检查 DMAP 是否已在运行
     if pgrep -f "dmap" > /dev/null 2>&1; then
@@ -548,10 +553,10 @@ start_dmap() {
         $DM_HOME/bin/dmap 2>/dev/null &
         sleep 2
         if pgrep -f "dmap" > /dev/null 2>&1; then
-            log_info "DMAP 服务启动成功"
+            log_info "DMAP 服务启动成功（备份归档管理进程，运行中）"
             return 0
         else
-            log_warn "DMAP 服务启动失败，尝试使用内置模式..."
+            log_warn "DMAP 服务启动失败，将使用 dmrman 内置模式继续..."
             return 1
         fi
     else
@@ -965,13 +970,13 @@ online_full_backup() {
     read -p "确认执行联机完整备份? (yes/no): " confirm
     [ "$confirm" != "yes" ] && log_info "已取消" && exit 0
     
-    # 检查 DMAP 是否运行（disql 联机备份不强制依赖 DMAP，但建议启动）
+    # 检查 DMAP 是否运行（联机备份建议启动 DMAP）
     if ! pgrep -f "dmap" > /dev/null 2>&1; then
-        log_warn "DMAP 服务未运行，联机备份可能受影响"
+        log_warn "DMAP 服务未运行，建议启动以确保备份正常"
         log_info "尝试启动 DMAP..."
         start_dmap
     else
-        log_info "DMAP 服务运行正常"
+        log_info "DMAP 服务运行正常（备份归档管理进程已就绪）"
     fi
     
     log_info "联机完整备份..."
