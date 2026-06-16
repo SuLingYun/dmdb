@@ -1522,10 +1522,21 @@ $(basename "$bak")"
         log_warn "跳过归档日志应用"
         log_step "恢复数据库一致性（无归档，仅完成还原）..."
         
-        # 模式3（仅恢复备份）：数据已通过 RESTORE 恢复，无需 RECOVER
-        # 直接 UPDATE DB_MAGIC 让数据库可启动
+        # 模式3（仅恢复备份）：数据已通过 RESTORE 恢复
+        # 先执行 RECOVER DATABASE 使数据库达到一致性状态
+        # 再执行 UPDATE DB_MAGIC 更新数据库魔数以便启动
         SECONDS=0
-        run_dmrman "更新 DB_MAGIC（无归档，直接更新）" "$DM_HOME/bin/dmrman CTLSTMT=\"RECOVER DATABASE '$DM_DATA/dm.ini' UPDATE DB_MAGIC;\""
+        run_dmrman "恢复数据库一致性" "$DM_HOME/bin/dmrman CTLSTMT=\"RECOVER DATABASE '$DM_DATA/dm.ini';\""
+        local recover_rc=$?
+        log_info "RECOVER 耗时: ${SECONDS} 秒"
+        
+        if [ $recover_rc -ne 0 ]; then
+            log_error "RECOVER 失败，请检查数据库状态"
+            exit 1
+        fi
+        
+        SECONDS=0
+        run_dmrman "更新 DB_MAGIC" "$DM_HOME/bin/dmrman CTLSTMT=\"RECOVER DATABASE '$DM_DATA/dm.ini' UPDATE DB_MAGIC;\""
         local magic_rc=$?
         log_info "UPDATE DB_MAGIC 耗时: ${SECONDS} 秒"
         
