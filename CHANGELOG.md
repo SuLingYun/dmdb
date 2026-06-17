@@ -2,6 +2,27 @@
 
 所有重要的项目变更都将记录在此文件中。
 
+## [v1.2.0] - 2026-06-17
+
+### Added
+
+- 新增 `rsync-inotify-sync.sh` 实时文件同步工具
+  - 支持本地服务器（数据源）和备份服务器（接收端）两种模式
+  - 支持 systemd 服务管理（rsync-sync / rsyncd）
+  - 兼容麒麟V10、CentOS/RHEL 7-9、Ubuntu/Debian、Alpine 等系统
+  - 自动安装 rsync 和 inotify-tools 依赖
+  - 支持多模块管理，可同时接收多个数据源
+- 新增 `inotify-tools-3.22.1.0.tar.gz` 源码包（同步工具依赖）
+- 新增 `RSYNC_SYNC.md` 同步工具使用指南
+- README 新增适用场景：文件实时同步备份
+
+### Changed
+
+- README 目录结构更新，添加 rsync-inotify-sync.sh 和压缩包说明
+- README 文档导航新增 RSYNC_SYNC.md 链接
+
+---
+
 ## [v1.1.1] - 2026-06-17
 
 ### Added
