@@ -374,3 +374,245 @@ DM_DATA="../data/dmtrain"
 | `DMRMAN_TIMEOUT` | 超时时间 |
 | `RECOVER_EARLIEST_TIME` | 可恢复最早时间 |
 | `RECOVER_LATEST_TIME` | 可恢复最晚时间 |
+
+---
+
+## reset_dm.sh 配置说明
+
+### 配置位置
+
+所有配置位于脚本头部的 **用户配置区** 部分（第 26-42 行）：
+
+```bash
+# =============================================================================
+# 用户配置区域（根据实际环境修改）
+# =============================================================================
+OLD_SERVICE_NAME="DmServiceDMSERVER"
+NEW_SERVICE_NAME="DmServiceDMSERVER"
+DM_HOME="/data/dm"
+# ... 其他配置
+# =============================================================================
+```
+
+### 基础配置
+
+#### OLD_SERVICE_NAME
+
+旧的 systemd 服务名称，用于停止和卸载。
+
+```bash
+OLD_SERVICE_NAME="DmServiceDMSERVER"
+```
+
+| 属性 | 值 |
+|------|-----|
+| 默认值 | `DmServiceDMSERVER` |
+| 必需 | 是 |
+| 说明 | 需要卸载的旧服务名 |
+
+#### NEW_SERVICE_NAME
+
+新的 systemd 服务名称。
+
+```bash
+NEW_SERVICE_NAME="DmServiceDMSERVER"
+```
+
+| 属性 | 值 |
+|------|-----|
+| 默认值 | `DmServiceDMSERVER` |
+| 必需 | 是 |
+| 说明 | 新注册的服务名，通常与旧名相同 |
+
+#### DM_HOME
+
+达梦数据库软件安装目录。
+
+```bash
+DM_HOME="/data/dm"
+```
+
+| 属性 | 值 |
+|------|-----|
+| 默认值 | `/data/dm` |
+| 必需 | 是 |
+| 说明 | 必须包含 `bin/dminit`、`bin/dmrman`、`bin/disql` |
+
+#### DATA_DIR
+
+数据文件根目录（不含实例名）。
+
+```bash
+DATA_DIR="/data/dmdata"
+```
+
+| 属性 | 值 |
+|------|-----|
+| 默认值 | `/data/dmdata` |
+| 必需 | 是 |
+| 说明 | 脚本会在该目录下创建 `DAMENG` 子目录 |
+
+#### ARCH_DIR
+
+归档日志根目录。
+
+```bash
+ARCH_DIR="/data/dmarch"
+```
+
+| 属性 | 值 |
+|------|-----|
+| 默认值 | `/data/dmarch` |
+| 必需 | 是 |
+| 说明 | 脚本会在该目录下创建 `DAMENG` 子目录 |
+
+#### BAK_DIR
+
+备份文件根目录。
+
+```bash
+BAK_DIR="/data/dmbak"
+```
+
+| 属性 | 值 |
+|------|-----|
+| 默认值 | `/data/dmbak` |
+| 必需 | 是 |
+| 说明 | 脚本会在该目录下创建 `DAMENG/bak` 子目录 |
+
+#### SYSDBA_PWD
+
+SYSDBA 用户密码。
+
+```bash
+SYSDBA_PWD='your_secure_password'
+```
+
+| 属性 | 值 |
+|------|-----|
+| 默认值 | 无 |
+| 必需 | 是 |
+| 说明 | **生产环境必须修改**，建议使用强密码 |
+
+#### SYSAUDITOR_PWD
+
+SYSAUDITOR 用户密码。
+
+```bash
+SYSAUDITOR_PWD='your_secure_password'
+```
+
+| 属性 | 值 |
+|------|-----|
+| 默认值 | 无 |
+| 必需 | 是 |
+| 说明 | **生产环境必须修改** |
+
+### 高级配置
+
+#### ARCH_FILE_SIZE
+
+单个归档文件大小（MB）。
+
+```bash
+ARCH_FILE_SIZE=1024
+```
+
+| 属性 | 值 | 说明 |
+|------|-----|------|
+| 默认值 | `1024` | 1GB |
+| 说明 | 正整数 | 单个归档文件大小上限 |
+
+#### ARCH_SPACE_LIMIT
+
+归档空间总限制（MB）。
+
+```bash
+ARCH_SPACE_LIMIT=204800
+```
+
+| 属性 | 值 | 说明 |
+|------|-----|------|
+| 默认值 | `204800` | 200GB |
+| 说明 | 正整数 | 归档空间满后自动覆盖旧归档 |
+
+#### BACKUP_RETAIN_DAYS
+
+备份保留天数。
+
+```bash
+BACKUP_RETAIN_DAYS=30
+```
+
+| 属性 | 值 | 说明 |
+|------|-----|------|
+| 默认值 | `30` | 30天 |
+| 说明 | 正整数 | 超过此天数的备份将被自动清理 |
+
+### 完整配置示例
+
+#### 生产环境配置
+
+```bash
+# =============================================================================
+# 用户配置区域（生产环境）
+# =============================================================================
+OLD_SERVICE_NAME="DmServiceDMSERVER"
+NEW_SERVICE_NAME="DmServiceDMSERVER"
+DM_HOME="/data/dm"
+DATA_DIR="/data/dmdata"
+ARCH_DIR="/data/dmarch"
+BAK_DIR="/data/dmbak"
+SYSDBA_PWD='StrongPassword123!'
+SYSAUDITOR_PWD='StrongPassword123!'
+
+ARCH_FILE_SIZE=1024
+ARCH_SPACE_LIMIT=204800
+BACKUP_RETAIN_DAYS=30
+```
+
+#### 测试环境配置
+
+```bash
+# =============================================================================
+# 用户配置区域（测试环境）
+# =============================================================================
+OLD_SERVICE_NAME="DmServiceDMSERVER"
+NEW_SERVICE_NAME="DmServiceDMSERVER"
+DM_HOME="/opt/dmdbms"
+DATA_DIR="/home/dmdba/data"
+ARCH_DIR="/home/dmdba/arch"
+BAK_DIR="/home/dmdba/backup"
+SYSDBA_PWD='TEST123'
+SYSAUDITOR_PWD='TEST123'
+
+ARCH_FILE_SIZE=512
+ARCH_SPACE_LIMIT=102400
+BACKUP_RETAIN_DAYS=7
+```
+
+### 配置检查清单
+
+执行初始化前，请确认以下配置正确：
+
+- [ ] `DM_HOME` - 目录存在且包含 dminit
+- [ ] `DATA_DIR` - 目录存在且可写
+- [ ] `ARCH_DIR` - 目录存在且可写
+- [ ] `BAK_DIR` - 目录存在且可写
+- [ ] `SYSDBA_PWD` - 已设置强密码
+- [ ] `SYSAUDITOR_PWD` - 已设置强密码
+- [ ] `OLD_SERVICE_NAME` - 正确的旧服务名
+- [ ] `NEW_SERVICE_NAME` - 正确的新服务名
+
+### dminit 初始化参数（固定值）
+
+脚本使用以下固定参数初始化数据库实例，**勿轻易修改**：
+
+| 参数 | 值 | 说明 |
+|------|-----|------|
+| `PAGE_SIZE` | 32 | 页大小 32KB |
+| `EXTENT_SIZE` | 32 | 簇大小 32 页 |
+| `LOG_SIZE` | 1024 | 日志文件 1024MB |
+| `CASE_SENSITIVE` | 1 | 大小写敏感 |
+| `CHARSET` | 1 | UTF-8 字符集 |
+| `PORT_NUM` | 5236 | 监听端口 |

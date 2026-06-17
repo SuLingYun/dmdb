@@ -13,6 +13,7 @@
 - [超时问题](#超时问题)
 - [归档问题](#归档问题)
 - [增量备份问题](#增量备份问题)
+- [reset_dm.sh 相关问题](#reset_dm-sh-相关问题)
 
 ---
 
@@ -548,6 +549,174 @@ RMAN[-8308]:需要先执行RECOVER DATABASE操作，再执行RECOVER DATABASE UP
 **解决方案：**
 
 按照问题19中的两步命令顺序执行，先普通恢复，再 UPDATE DB_MAGIC。脚本已按此顺序正确处理。
+
+---
+
+## reset_dm.sh 相关问题
+
+### 问题21：dminit 初始化失败
+
+**错误信息：**
+
+```
+[ERROR] dminit 执行失败
+```
+
+**原因：** 数据目录权限不对、磁盘空间不足或端口已被占用。
+
+**解决方案：**
+
+```bash
+# 1. 检查目录权限
+ls -la /data/dmdata/
+
+# 2. 检查磁盘空间
+df -h /data/dmdata
+
+# 3. 检查端口占用
+netstat -tlnp | grep 5236
+
+# 4. 确保 dmdba 用户有写权限
+chown -R dmdba:dinstall /data/dmdata
+```
+
+---
+
+### 问题22：归档配置不生效
+
+**错误信息：**
+
+```
+ARCH_MODE = N
+```
+
+**原因：** 仅创建 `dmarch.ini` 和设置 `ARCH_INI=1` 还不够，数据库必须在 MOUNT 状态下执行 `ALTER DATABASE ARCHIVELOG`。
+
+**解决方案：**
+
+```bash
+# 手动开启归档模式
+/data/dm/bin/disql "SYSDBA/<密码>@localhost:5236" <<'EOF'
+SP_SET_PARA_VALUE(1, 'ARCH_INI', 1);
+ALTER DATABASE MOUNT;
+ALTER DATABASE ARCHIVELOG;
+ALTER DATABASE OPEN;
+EOF
+```
+
+---
+
+### 问题23：备份作业未创建成功
+
+**错误信息：**
+
+```
+SYSJOB.SYSJOBS 中没有 BAK_FULL 和 BAK_INC 记录
+```
+
+**原因：** 作业环境未初始化或 SQL 执行失败。
+
+**解决方案：**
+
+```bash
+# 1. 检查作业环境是否初始化
+/data/dm/bin/disql "SYSDBA/<密码>@localhost:5236" -e \
+  "SELECT COUNT(1) FROM DBA_OBJECTS WHERE OBJECT_TYPE='SCH' AND OBJECT_NAME='SYSJOB';"
+
+# 2. 手动初始化作业环境
+/data/dm/bin/disql "SYSDBA/<密码>@localhost:5236" -e "SP_INIT_JOB_SYS(1);"
+```
+
+---
+
+### 问题24：脚本执行权限不足
+
+**错误信息：**
+
+```
+Permission denied
+```
+
+**原因：** 脚本没有执行权限。
+
+**解决方案：**
+
+```bash
+# 添加执行权限
+chmod +x dm_recover.sh
+chmod +x reset_dm.sh
+```
+
+---
+
+### 问题25：磁盘空间不足
+
+**错误信息：**
+
+```
+No space left on device
+```
+
+**原因：** 目标磁盘空间不足。
+
+**解决方案：**
+
+```bash
+# 1. 检查磁盘空间
+df -h
+
+# 2. 清理旧备份
+find /data/dmbak -type d -mtime +30 -exec rm -rf {} \;
+
+# 3. 清理旧归档
+find /data/dmarch -type f -mtime +7 -exec rm -f {} \;
+```
+
+---
+
+### 问题26：dm_recover.sh 模式4（脱机备份）失败
+
+**错误信息：**
+
+```
+备份失败（退出码: 1）
+```
+
+**原因：** 数据库未停止或 DMAP 服务未启动。
+
+**解决方案：**
+
+```bash
+# 1. 确保数据库已停止
+systemctl stop DmServiceDAMENG
+pkill -9 -f "dmserver"
+
+# 2. 启动 DMAP 服务
+/data/dm/bin/dmap &
+sleep 2
+```
+
+---
+
+### 问题27：dm_recover.sh 模式5（联机备份）失败
+
+**错误信息：**
+
+```
+[-70036]: Connected to an inactive instance
+```
+
+**原因：** 数据库未启动或处于 MOUNT 状态。
+
+**解决方案：**
+
+```bash
+# 1. 确保数据库已启动
+systemctl start DmServiceDAMENG
+
+# 2. 确保数据库处于 OPEN 状态
+/data/dm/bin/disql "SYSDBA/<密码>@localhost:5236" -e "ALTER DATABASE OPEN;"
+```
 
 ---
 
