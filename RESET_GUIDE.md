@@ -258,6 +258,5 @@ cat /data/dmdata/DAMENG/dm.ini | grep -E "PORT|INSTANCE_NAME"
 
 ## 相关文档
 
-- [README.md](README.md) — 项目主文档，包含快速开始
+- [README.md](README.md) — 项目主文档，包含快速开始和常见问题
 - [dm_recover.sh](dm_recover.sh) — 数据库恢复脚本
-- [TROUBLESHOOTING.md](TROUBLESHOOTING.md) — 达梦恢复故障排查
